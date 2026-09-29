@@ -1,0 +1,177 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "id": "missing-arabinose",
+      "title": "Case A",
+      "fictionalCause": "The fictional induction component was missing from P3.",
+      "selectionClaimSupported": true,
+      "expressionClaimSupported": false,
+      "outcomes": {
+        "P1": {
+          "growth": "Present",
+          "fluorescence": "NoneDetected"
+        },
+        "P2": {
+          "growth": "Absent",
+          "fluorescence": "NotAssessable"
+        },
+        "P3": {
+          "growth": "Present",
+          "fluorescence": "NoneDetected"
+        },
+        "P4": {
+          "growth": "Present",
+          "fluorescence": "NoneDetected"
+        }
+      },
+      "setup": {
+        "tubeContents": {
+          "T": "DNA",
+          "NC": "Buffer"
+        },
+        "plateAssignments": {
+          "P1": "T|LB+amp",
+          "P2": "NC|LB+amp",
+          "P3": "T|LB+amp",
+          "P4": "NC|LB"
+        },
+        "intendedPlateLabels": {
+          "P1": "T|LB+amp",
+          "P2": "NC|LB+amp",
+          "P3": "T|LB+amp+Ara",
+          "P4": "NC|LB"
+        }
+      }
+    },
+    {
+      "id": "swapped-tube-labels",
+      "title": "Case B",
+      "fictionalCause": "The fictional T and NC tube labels were swapped while their actual contents stayed distinct.",
+      "selectionClaimSupported": false,
+      "expressionClaimSupported": false,
+      "outcomes": {
+        "P1": {
+          "growth": "Absent",
+          "fluorescence": "NotAssessable"
+        },
+        "P2": {
+          "growth": "Present",
+          "fluorescence": "NoneDetected"
+        },
+        "P3": {
+          "growth": "Absent",
+          "fluorescence": "NotAssessable"
+        },
+        "P4": {
+          "growth": "Present",
+          "fluorescence": "NoneDetected"
+        }
+      },
+      "setup": {
+        "tubeContents": {
+          "T": "Buffer",
+          "NC": "DNA"
+        },
+        "plateAssignments": {
+          "P1": "T|LB+amp",
+          "P2": "NC|LB+amp",
+          "P3": "T|LB+amp+Ara",
+          "P4": "NC|LB"
+        },
+        "intendedPlateLabels": {
+          "P1": "T|LB+amp",
+          "P2": "NC|LB+amp",
+          "P3": "T|LB+amp+Ara",
+          "P4": "NC|LB"
+        }
+      }
+    },
+    {
+      "id": "missing-dna",
+      "title": "Case C",
+      "fictionalCause": "The fictional DNA addition was absent from the transformation reaction.",
+      "selectionClaimSupported": false,
+      "expressionClaimSupported": false,
+      "outcomes": {
+        "P1": {
+          "growth": "Absent",
+          "fluorescence": "NotAssessable"
+        },
+        "P2": {
+          "growth": "Absent",
+          "fluorescence": "NotAssessable"
+        },
+        "P3": {
+          "growth": "Absent",
+          "fluorescence": "NotAssessable"
+        },
+        "P4": {
+          "growth": "Present",
+          "fluorescence": "NoneDetected"
+        }
+      },
+      "setup": {
+        "tubeContents": {
+          "T": "Buffer",
+          "NC": "Buffer"
+        },
+        "plateAssignments": {
+          "P1": "T|LB+amp",
+          "P2": "NC|LB+amp",
+          "P3": "T|LB+amp+Ara",
+          "P4": "NC|LB"
+        },
+        "intendedPlateLabels": {
+          "P1": "T|LB+amp",
+          "P2": "NC|LB+amp",
+          "P3": "T|LB+amp+Ara",
+          "P4": "NC|LB"
+        }
+      }
+    },
+    {
+      "id": "failed-antibiotic-negative-control",
+      "title": "Case D",
+      "fictionalCause": "The fictional antibiotic selection condition was absent from the purported negative-control selection plate.",
+      "selectionClaimSupported": false,
+      "expressionClaimSupported": false,
+      "outcomes": {
+        "P1": {
+          "growth": "Present",
+          "fluorescence": "NoneDetected"
+        },
+        "P2": {
+          "growth": "Present",
+          "fluorescence": "NoneDetected"
+        },
+        "P3": {
+          "growth": "Present",
+          "fluorescence": "Detected"
+        },
+        "P4": {
+          "growth": "Present",
+          "fluorescence": "NoneDetected"
+        }
+      },
+      "setup": {
+        "tubeContents": {
+          "T": "DNA",
+          "NC": "Buffer"
+        },
+        "plateAssignments": {
+          "P1": "T|LB+amp",
+          "P2": "NC|LB",
+          "P3": "T|LB+amp+Ara",
+          "P4": "NC|LB"
+        },
+        "intendedPlateLabels": {
+          "P1": "T|LB+amp",
+          "P2": "NC|LB+amp",
+          "P3": "T|LB+amp+Ara",
+          "P4": "NC|LB"
+        }
+      }
+    }
+  ]
+}

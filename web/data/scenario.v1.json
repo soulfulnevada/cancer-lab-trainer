@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "fictional-atp-viability-v1",
+  "title": "Fictional ATP Viability Plate",
+  "seed": 20260911,
+  "trainingNotice": "Illustrative scenario. Values and actions are not a real protocol.",
+  "toyTransferVolumeUl": 50,
+  "readerMode": "Luminescence",
+  "activeWells": [
+    { "well": "B1", "role": "Blank", "expectedSignal": 115 },
+    { "well": "B2", "role": "Blank", "expectedSignal": 121 },
+    { "well": "B3", "role": "Vehicle control", "expectedSignal": 1003 },
+    { "well": "B4", "role": "Vehicle control", "expectedSignal": 978 },
+    { "well": "B5", "role": "Fictional treatment", "expectedSignal": 378 },
+    { "well": "B6", "role": "Fictional treatment", "expectedSignal": 342 }
+  ]
+}
+

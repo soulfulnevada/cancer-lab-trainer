@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "transformation-controls-v1",
+  "title": "Transformation Controls: Gene Expression",
+  "seed": 20260917,
+  "trainingNotice": "Illustrative conceptual model only. It does not provide a wet-lab protocol, parameters, or competency assessment.",
+  "plates": [
+    { "id": "P1", "label": "T · LB+amp", "expectedAssignment": "T|LB+amp" },
+    { "id": "P2", "label": "NC · LB+amp", "expectedAssignment": "NC|LB+amp" },
+    { "id": "P3", "label": "T · LB+amp+Ara", "expectedAssignment": "T|LB+amp+Ara" },
+    { "id": "P4", "label": "NC · LB", "expectedAssignment": "NC|LB" }
+  ]
+}

@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Transformation.Tests'">
+    <BaseOutputPath>$(MSBuildThisFileDirectory)bin-transformation\</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)obj-transformation\</BaseIntermediateOutputPath>
+    <MSBuildProjectExtensionsPath>$(MSBuildThisFileDirectory)obj-transformation\</MSBuildProjectExtensionsPath>
+  </PropertyGroup>
+</Project>

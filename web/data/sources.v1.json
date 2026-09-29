@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "id": "promega-ctg",
+      "label": "ATP viability assay family reference",
+      "url": "https://worldwide.promega.com/-/media/files/resources/protocols/technical-manuals/101/celltiterglo-2-0-assay-protocol.pdf?la=en",
+      "use": "ATP-dependent luminescence is used here as the concept behind the fictional training measurement."
+    },
+    {
+      "id": "promega-myglo",
+      "label": "Luminescence reader reference",
+      "url": "https://www.promega.com/products/cell-health-assays/cell-viability-and-cytotoxicity-assays/myglo-reagent-reader/?catNum=MG1010",
+      "use": "Reader configuration and plate orientation are represented as training concepts."
+    },
+    {
+      "id": "eppendorf-research-plus",
+      "label": "Pipette behavior reference",
+      "url": "https://www.eppendorf.com/product-media/doc/en/186591/Eppendorf_Liquid-Handling_Operating-manual_Research-plus_Eppendorf-Research-plus.pdf",
+      "use": "Research plus operating manual pp. 22–23 informs the illustrated forward sequence: press first stop in air, immerse, release while immersed, then deliver at first stop, clear at second stop, withdraw while held, and release in air."
+    },
+    {
+      "id": "eppendorf-liquid-handling-sop",
+      "label": "Eppendorf liquid-handling SOP manual",
+      "url": "https://www.eppendorf.com/manuals",
+      "use": "User-supplied reviewed PDF: Eppendorf_Liquid-Handling_SOP_Manual-pipettes-dispensers_Standard-Operating-Procedure (8).pdf, edition ASOP P39 020-16/2025-12, SHA-256 D1407722E4953EB11415D2DC80800467995B75E7CC3D4421D4D81DA6DE6848AB. The URL is Eppendorf's general official manuals portal, not a verified download location for this exact file. Its controlled measuring-condition and mass-volume sections inform the general teaching distinction between accuracy, precision, shared bias, dispersion, and controlled gravimetric checking; it does not supply an in-app procedure."
+    },
+    {
+      "id": "cdc-laboratory-competencies",
+      "label": "Laboratory workforce competency reference",
+      "url": "https://www.cdc.gov/mmwr/preview/mmwrhtml/su6002a1.htm",
+      "use": "Preparation, safety awareness, documentation, and closeout are represented as competency categories."
+    }
+  ]
+}

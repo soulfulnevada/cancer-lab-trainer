@@ -1,0 +1,20 @@
+Cancer Lab Trainer
+Copyright (c) 2026 Jacob Carter
+
+This repository's original source is offered under the MIT License in LICENSE.
+That license does not relicense third-party components, documentation, or
+scientific references.
+
+The browser candidate is exported with Godot Engine. Godot is MIT-licensed;
+the complete Godot copyright and third-party attribution record is retained in
+docs/COPYRIGHT-GODOT.txt, with its license in docs/LICENSE-GODOT.txt.
+
+The deterministic seeded random-number behavior was derived while porting the
+project's .NET reference model. The .NET Foundation's MIT notice and supplied
+third-party notices are retained in docs/LICENSE-DOTNET.txt and
+docs/NOTICES-DOTNET.txt even though the browser candidate does not ship a .NET
+runtime.
+
+Scientific sources are concept references, not bundled source materials or
+endorsements. See docs/science-and-sources.md and
+docs/LEVEL2_SCIENCE_SOURCES.md.

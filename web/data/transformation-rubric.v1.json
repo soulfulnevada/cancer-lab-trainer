@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "dimensions": ["observations", "plausibility", "evidence-limits", "support-status"],
+  "criteria": {
+    "observations": "Record normal and excitation observations for all main and case plates.",
+    "plausibility": "Choose one current selection claim and one current expression claim; the debrief compares each with the curated control pattern.",
+    "evidence-limits": "Record an evidence-limit explanation for each main plate and an uncertainty statement for the case.",
+    "support-status": "Report whether each selected claim aligns with the control-derived support status; matching a fictional cause earns no separate credit."
+  }
+}

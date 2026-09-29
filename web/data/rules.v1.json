@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "illustrativeOnly": true,
+  "maxReplicateCvPercent": 20,
+  "minimumReferenceAdjustedSignal": 100,
+  "criticalErrors": ["TransferBeforePpe", "WrongVolume", "MissingControl", "PlateOrientation", "ReaderMode", "Mislabel", "WrongWell", "SampleIdentityMismatch", "TransferBeforeTraceability", "Carryover", "FastAspirationRelease", "DuplicateTransfer", "UnsupportedConclusion"],
+  "assessmentCategories": ["Preparation", "Traceability", "Handling", "Interpretation", "Closeout"],
+  "note": "These rules are learning design, not validation specifications or laboratory SOPs."
+}

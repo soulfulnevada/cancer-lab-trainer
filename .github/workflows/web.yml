@@ -1,0 +1,102 @@
+name: Verify web candidate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 8.0.425
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.19.0
+          package-manager-cache: false
+      - name: Install standard Godot 4.7.2 web export tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --output godot.zip https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+          unzip -q godot.zip -d "$RUNNER_TEMP/godot"
+          chmod +x "$RUNNER_TEMP/godot/Godot_v4.7.2-stable_linux.x86_64"
+          curl --fail --location --retry 3 --output godot-templates.tpz https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_export_templates.tpz
+          unzip -q godot-templates.tpz -d "$RUNNER_TEMP/godot-templates"
+          test -f "$RUNNER_TEMP/godot-templates/templates/web_nothreads_debug.zip"
+          test -f "$RUNNER_TEMP/godot-templates/templates/web_nothreads_release.zip"
+          echo "CANCER_LAB_GODOT=$RUNNER_TEMP/godot/Godot_v4.7.2-stable_linux.x86_64" >> "$GITHUB_ENV"
+          echo "CANCER_LAB_WEB_TEMPLATE_DEBUG=$RUNNER_TEMP/godot-templates/templates/web_nothreads_debug.zip" >> "$GITHUB_ENV"
+          echo "CANCER_LAB_WEB_TEMPLATE_RELEASE=$RUNNER_TEMP/godot-templates/templates/web_nothreads_release.zip" >> "$GITHUB_ENV"
+      - name: Verify reference simulations and deterministic oracle
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet run --project tests/CancerLabTrainer.Tests.csproj
+          if ($LASTEXITCODE -ne 0) { throw "CancerLabTrainer contract tests failed with $LASTEXITCODE." }
+          dotnet run --project tests/Transformation.Tests.csproj
+          if ($LASTEXITCODE -ne 0) { throw "Transformation contract tests failed with $LASTEXITCODE." }
+          ./web/tests/oracle_command_contract.ps1 -DotnetPath (Get-Command dotnet -CommandType Application).Source
+          if ($LASTEXITCODE -ne 0) { throw "Oracle command contract failed with $LASTEXITCODE." }
+          ./scripts/web/generate-parity-oracle.ps1 -DotnetPath (Get-Command dotnet -CommandType Application).Source
+          if ($LASTEXITCODE -ne 0) { throw "C# parity oracle generation failed with $LASTEXITCODE." }
+      - name: Verify GDScript parity and production seams
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          node web/tests/storage_adapter_contract.js
+          if ($LASTEXITCODE -ne 0) { throw "Storage adapter contract failed with $LASTEXITCODE." }
+          node web/tests/renderer_id_contract.js
+          if ($LASTEXITCODE -ne 0) { throw "Explain renderer contract failed with $LASTEXITCODE." }
+          & $env:CANCER_LAB_GODOT --headless --path web --script res://tests/level1_trace_compare.gd
+          if ($LASTEXITCODE -ne 0) { throw "Level 1 parity failed with $LASTEXITCODE." }
+          & $env:CANCER_LAB_GODOT --headless --path web --script res://tests/level2_trace_compare.gd
+          if ($LASTEXITCODE -ne 0) { throw "Level 2 parity failed with $LASTEXITCODE." }
+          & $env:CANCER_LAB_GODOT --headless --path web --script res://tests/export_contract.gd
+          if ($LASTEXITCODE -ne 0) { throw "Export contract failed with $LASTEXITCODE." }
+      - name: Build immutable browser candidate and stage public source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          ./scripts/web/build-web.ps1 -ReleaseId ci-${{ github.run_id }} -GodotPath $env:CANCER_LAB_GODOT -WebTemplateDebug $env:CANCER_LAB_WEB_TEMPLATE_DEBUG -WebTemplateRelease $env:CANCER_LAB_WEB_TEMPLATE_RELEASE
+          if ($LASTEXITCODE -ne 0) { throw "Web build failed with $LASTEXITCODE." }
+          python ./scripts/web/stage-public.py --release-id ci-${{ github.run_id }}
+          if ($LASTEXITCODE -ne 0) { throw "Public staging failed with $LASTEXITCODE." }
+          python web/tests/public_stage_contract.py
+          if ($LASTEXITCODE -ne 0) { throw "Staged-checkout public-source contract failed with $LASTEXITCODE." }
+      - name: Verify emitted offline cache contract
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          node web/tests/pwa_cache_contract.js dist/web/ci-${{ github.run_id }}
+          if ($LASTEXITCODE -ne 0) { throw "Offline cache contract failed with $LASTEXITCODE." }
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
+        with:
+          path: dist/web/ci-${{ github.run_id }}
+
+  deploy-pages:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

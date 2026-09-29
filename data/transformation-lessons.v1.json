@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "lessons": [
+    { "id": "intro", "title": "Transformation controls", "text": "Bacteria, a plasmid, antibiotic selection, and GFP are represented as concepts. DNA can be expressed through RNA to protein; fluorescence is viewed under excitation." },
+    { "id": "selection", "title": "Selection is not a census", "text": "Growth on antibiotic-containing medium is an observation in this fictional model. It does not show that every cell was transformed." },
+    { "id": "expression", "title": "Induction is separate", "text": "The PBAD/AraC teaching diagram represents arabinose-associated induction of GFP expression. Ampicillin resistance is a separate plasmid function." },
+    { "id": "limits", "title": "Evidence limits", "text": "A missing fluorescent signal does not alone establish absence of GFP DNA. A phenotype can support several possible causes." }
+  ]
+}

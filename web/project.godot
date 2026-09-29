@@ -1,0 +1,23 @@
+; Separate standard-GDScript web port. It never loads the desktop C# project.
+config_version=5
+
+[application]
+config/name="Cancer Lab Trainer Web"
+run/main_scene="res://scenes/WebMain.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+config/version="1.2.1-web.1"
+
+[display]
+window/size/viewport_width=1440
+window/size/viewport_height=900
+window/size/window_width_override=1280
+window/size/window_height_override=800
+window/stretch/mode="disabled"
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/default_filters/use_nearest_mipmap_filter=false
+
+[gui]
+theme/default_font_multichannel_signed_distance_field=true
