@@ -7,9 +7,11 @@ Cancer Lab Trainer is an offline, fictional teaching simulation for reasoning ab
 
 ## Browser deployment
 
-[Browser deployment (pending verification)](https://soulfulnevada.github.io/cancer-lab-trainer/)
+[Play Cancer Lab Trainer](https://soulfulnevada.github.io/cancer-lab-trainer/)
 
-The intended Pages address is shown above. Verify a deployed release directly before relying on it.
+The Pages release is live. CI run `36602564992` deployed commit `4a55fa981b58c92f29423ab1e0b400bf75056190`; its emitted release manifest was checked against all 25 published asset hashes. Targeted live-browser checks completed Guided and Assessment sessions for both levels, including recovery, resume, scoped deletion, downloads, keyboard navigation, and a compact viewport.
+
+This is focused browser evidence, not a claim of coverage across every browser, device, assistive technology, laboratory, or learning setting. The live service worker reported a ready cache; a disconnected live-origin session has not been repeated.
 
 ## Scope and scientific boundaries
 
