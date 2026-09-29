@@ -1,9 +1,10 @@
 {
   "schemaVersion": 1,
   "purpose": "Explicit public-source staging only; generated outputs, learner records, packages, caches, and parity fixture JSON are excluded.",
+  "publicReadme": "web/README.public.md",
   "include": [
     ".gitignore",
-    "README.md",
+    "web/README.public.md",
     "LICENSE",
     "NOTICE",
     "THIRD_PARTY_NOTICES.md",
@@ -34,6 +35,7 @@
     "web/tests/*.js",
     "web/tests/public_stage_contract.py",
     "web/tests/oracle_command_contract.ps1",
+    "web/tests/oracle_serialization_contract.ps1",
     "web/tests/*.html",
     "web/tests/*.json",
     "web/data/*.json",

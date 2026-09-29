@@ -19,6 +19,7 @@ var oracle = new Dictionary<string, object?>
 var serialized = JsonSerializer.Serialize(oracle, options);
 serialized = Regex.Replace(serialized, "\"attemptId\": \"[0-9a-f]{32}\"", "\"attemptId\": \"00000000000000000000000000000000\"");
 serialized = Regex.Replace(serialized, "\"retryOfAttemptId\": \"[0-9a-f]{32}\"", "\"retryOfAttemptId\": \"00000000000000000000000000000000\"");
+serialized = CanonicalizeOracleJson(serialized);
 File.WriteAllText(output, serialized);
 Console.WriteLine($"PASS: C# oracle wrote {output}");
 
@@ -85,8 +86,11 @@ static string NormalizeSaveIds(string save)
     using var after = JsonDocument.Parse(normalized);
     if (GetSaveProperty(after.RootElement, "Scenario", "scenario").GetRawText() != scenario || GetSaveProperty(after.RootElement, "Sources", "sources").GetRawText() != sources)
         throw new InvalidOperationException("Persistence ID normalization changed scenario or source data.");
-    return normalized;
+    return CanonicalizeOracleJson(normalized);
 }
+
+static string CanonicalizeOracleJson(string serialized) =>
+    serialized.Replace("\r\n", "\n", StringComparison.Ordinal);
 
 static JsonElement GetSaveProperty(JsonElement root, string pascalCase, string camelCase) =>
     root.TryGetProperty(pascalCase, out var pascal) ? pascal : root.GetProperty(camelCase);

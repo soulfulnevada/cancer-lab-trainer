@@ -59,8 +59,18 @@ def main() -> int:
         raise RuntimeError(f"Refusing to overwrite or escape immutable staging directory: {destination}")
     destination.mkdir(parents=True)
 
+    config = json.loads(ALLOWLIST.read_text(encoding="utf-8"))
+    public_readme = (ROOT / config["publicReadme"]).resolve()
+    try:
+        public_readme.relative_to(ROOT)
+    except ValueError as error:
+        raise RuntimeError("Public README leaves the repository.") from error
+    sources = allowed_files()
+    if public_readme not in sources:
+        raise RuntimeError("The public README must be included by the explicit allowlist.")
+
     staged: list[dict[str, object]] = []
-    for source in allowed_files():
+    for source in sources:
         relative = source.relative_to(ROOT)
         payload = source.read_bytes()
         if any(marker in payload.lower() for marker in PRIVATE_PATH_MARKERS):
@@ -69,6 +79,10 @@ def main() -> int:
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, target)
         staged.append({"path": relative.as_posix(), "bytes": len(payload), "sha256": sha256(source)})
+        if source == public_readme:
+            readme_target = destination / "README.md"
+            shutil.copyfile(source, readme_target)
+            staged.append({"path": "README.md", "bytes": len(payload), "sha256": sha256(source)})
 
     manifest = {
         "schemaVersion": 1,

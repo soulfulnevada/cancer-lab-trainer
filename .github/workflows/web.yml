@@ -51,6 +51,8 @@ jobs:
           $dotnetExecutable = Get-Command dotnet -CommandType Application | Select-Object -First 1 -ExpandProperty Source
           ./web/tests/oracle_command_contract.ps1 -DotnetPath $dotnetExecutable
           if ($LASTEXITCODE -ne 0) { throw "Oracle command contract failed with $LASTEXITCODE." }
+          ./web/tests/oracle_serialization_contract.ps1 -DotnetPath $dotnetExecutable
+          if ($LASTEXITCODE -ne 0) { throw "Oracle serialization contract failed with $LASTEXITCODE." }
           ./scripts/web/generate-parity-oracle.ps1 -DotnetPath $dotnetExecutable
           if ($LASTEXITCODE -ne 0) { throw "C# parity oracle generation failed with $LASTEXITCODE." }
       - name: Verify GDScript parity and production seams

@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import importlib.util
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -27,8 +28,11 @@ WORKFLOW_REQUIRED_FILES = (
     "web/tests/renderer_id_contract.js",
     "web/tests/pwa_cache_contract.js",
     "web/tests/oracle_command_contract.ps1",
+    "web/tests/oracle_serialization_contract.ps1",
     "web/tests/public_stage_contract.py",
 )
+PUBLIC_README_TITLE = "# Cancer Lab Trainer — Browser Edition"
+MARKDOWN_LINK = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 
 
 def run_python(script: Path, release_id: str, cwd: Path) -> None:
@@ -45,6 +49,20 @@ def remove_stage(path: Path) -> None:
     assert path.parent == OUTPUT_ROOT or path.parent == path.parents[3] / "public-stage"
     if path.exists():
         shutil.rmtree(path)
+
+
+def assert_public_readme_links(stage: Path) -> None:
+    readme = stage / "README.md"
+    text = readme.read_text(encoding="utf-8")
+    assert text.startswith(PUBLIC_README_TITLE), "Public stage must use the browser-scoped README."
+    assert "https://soulfulnevada.github.io/cancer-lab-trainer/" in text
+    for target in MARKDOWN_LINK.findall(text):
+        local_target = target.split("#", 1)[0]
+        if not local_target or "://" in local_target or local_target.startswith("mailto:"):
+            continue
+        destination = (readme.parent / local_target).resolve()
+        assert destination.is_relative_to(stage.resolve()), f"README link escapes staged checkout: {target}"
+        assert destination.exists(), f"README link is not staged: {target}"
 
 
 def main() -> None:
@@ -66,12 +84,16 @@ def main() -> None:
         run_python(STAGER, source_id, ROOT)
         staged_stager = source_stage / STAGED_STAGER
         assert staged_stager.is_file(), "The public stage must include the workflow-invoked staging script."
+        assert_public_readme_links(source_stage)
         for relative in WORKFLOW_REQUIRED_FILES:
             assert (source_stage / relative).is_file(), f"Workflow dependency is absent from staged checkout: {relative}"
         run_python(staged_stager, nested_id, source_stage)
         manifest = json.loads((nested_stage / "public-source-manifest.json").read_text(encoding="utf-8"))
         staged_paths = {entry["path"] for entry in manifest["files"]}
         assert STAGED_STAGER.as_posix() in staged_paths
+        assert "README.md" in staged_paths
+        assert "web/README.public.md" in staged_paths
+        assert_public_readme_links(nested_stage)
 
         workflow = (ROOT / ".github" / "workflows" / "web.yml").read_text(encoding="utf-8")
         assert "--install-export-templates" not in workflow
@@ -79,6 +101,7 @@ def main() -> None:
         assert "web_nothreads_release.zip" in workflow
         assert "$dotnetExecutable = Get-Command dotnet -CommandType Application | Select-Object -First 1 -ExpandProperty Source" in workflow
         assert "-DotnetPath $dotnetExecutable" in workflow
+        assert "web/tests/oracle_serialization_contract.ps1" in workflow
         assert "--headless --editor --path web --import" in workflow
         assert "Godot project import failed" in workflow
         assert "web/tests/oracle_command_contract.ps1" in workflow
