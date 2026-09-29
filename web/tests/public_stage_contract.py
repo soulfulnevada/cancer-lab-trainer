@@ -77,7 +77,10 @@ def main() -> None:
         assert "--install-export-templates" not in workflow
         assert "web_nothreads_debug.zip" in workflow
         assert "web_nothreads_release.zip" in workflow
-        assert "-DotnetPath (Get-Command dotnet -CommandType Application).Source" in workflow
+        assert "$dotnetExecutable = Get-Command dotnet -CommandType Application | Select-Object -First 1 -ExpandProperty Source" in workflow
+        assert "-DotnetPath $dotnetExecutable" in workflow
+        assert "--headless --editor --path web --import" in workflow
+        assert "Godot project import failed" in workflow
         assert "web/tests/oracle_command_contract.ps1" in workflow
         assert "python web/tests/public_stage_contract.py" in workflow
         assert workflow.count("$LASTEXITCODE -ne 0") >= 8

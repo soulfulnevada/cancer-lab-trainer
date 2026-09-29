@@ -9,7 +9,8 @@ if ([string]::IsNullOrWhiteSpace($DotnetPath)) {
     if (-not [string]::IsNullOrWhiteSpace($env:DOTNET_ROOT) -and (Test-Path -LiteralPath $env:DOTNET_ROOT)) {
         $DotnetPath = $env:DOTNET_ROOT
     } else {
-        $command = Get-Command dotnet -CommandType Application -ErrorAction SilentlyContinue
+        $command = Get-Command dotnet -CommandType Application -ErrorAction SilentlyContinue |
+            Select-Object -First 1
         if ($command) { $DotnetPath = $command.Source }
     }
 }
