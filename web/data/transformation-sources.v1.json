@@ -1,8 +1,6 @@
 {
   "schemaVersion": 1,
   "entries": [
-    { "id": "bio-rad-pglo-manual", "label": "Bio-Rad pGLO bacterial transformation kit student manual", "url": "https://www.bio-rad.com/webroot/web/pdf/lse/literature/10048976.pdf", "use": "Conceptual source for plasmid selection, arabinose-associated GFP expression, and excitation-view teaching." },
-    { "id": "course-slides-04", "label": "04_slides.pdf (local course reference, not bundled)", "url": "", "use": "Local course reference; pages 2, 10–11 and 53–54 informed conceptual selection, GFP expression, and excitation-view teaching. The PDF is not bundled, copied, or reproduced." },
-    { "id": "course-handout-01", "label": "01_handout (1).pdf (local course reference, not bundled)", "url": "", "use": "Local course reference; the six-page handout is not bundled, copied, or reproduced." }
+    { "id": "bio-rad-pglo-manual", "label": "Bio-Rad pGLO bacterial transformation kit student manual", "url": "https://www.bio-rad.com/webroot/web/pdf/lse/literature/10048976.pdf", "use": "Conceptual source for plasmid selection, arabinose-associated GFP expression, and excitation-view teaching." }
   ]
 }

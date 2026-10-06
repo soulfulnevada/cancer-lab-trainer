@@ -328,7 +328,16 @@ func _view_plate(id: Variant, view: Variant, is_case: bool) -> Array:
 		state.evidenceViewed.append(evidence)
 	if not is_case and _main_all_seen():
 		state.phase = "Explain"
-	return [true, "%s view recorded for %s. The observed phenotype is available for explanation." % [view, id], "A no-growth plate makes fluorescence not assessable; it does not mean GFP is absent."]
+	return [true, "%s view recorded for %s. The observed phenotype is available for explanation." % [view, id], _view_coaching(plate, view)]
+
+func _view_coaching(plate: Dictionary, view: String) -> String:
+	if plate.growth == "Absent":
+		return "No colonies grew, so fluorescence cannot be assessed on this plate; that does not mean GFP is absent."
+	if view == "normal":
+		return "Colonies grew. Growth is an observation; it does not show that every cell took up the plasmid."
+	if plate.fluorescence == "Detected":
+		return "Green under excitation is consistent with GFP expression in these colonies; it does not show why expression occurred."
+	return "These colonies are not green under excitation. That does not prove the GFP DNA is missing; expression may not have been switched on."
 
 func _explain(id: Variant, choice: Variant) -> Array:
 	if state.phase != "Explain" or id == null or not ["no-colonies-not-assessable", "nongreen-not-no-dna", "green-consistent-gfp", "growth-proves-all", "nonfluorescence-proves-no-dna"].has(choice) or _plate(id).is_empty():
@@ -622,7 +631,7 @@ func _format_dictionary(values: Dictionary) -> String:
 func _definitions_valid(candidate_scenario: Variant, candidate_lessons: Variant, candidate_cases: Variant, candidate_rubric: Variant, candidate_sources: Variant) -> bool:
 	if typeof(candidate_scenario) != TYPE_DICTIONARY or typeof(candidate_lessons) != TYPE_DICTIONARY or typeof(candidate_cases) != TYPE_DICTIONARY or typeof(candidate_rubric) != TYPE_DICTIONARY or typeof(candidate_sources) != TYPE_DICTIONARY:
 		return false
-	if candidate_scenario.get("schemaVersion") != 1 or candidate_lessons.get("schemaVersion") != 1 or candidate_cases.get("schemaVersion") != 1 or candidate_rubric.get("schemaVersion") != 1 or candidate_sources.get("schemaVersion") != 1 or str(candidate_scenario.get("id", "")).is_empty() or candidate_scenario.get("plates", []).size() != 4 or candidate_lessons.get("lessons", []).size() < 4 or candidate_sources.get("entries", []).size() != 3:
+	if candidate_scenario.get("schemaVersion") != 1 or candidate_lessons.get("schemaVersion") != 1 or candidate_cases.get("schemaVersion") != 1 or candidate_rubric.get("schemaVersion") != 1 or candidate_sources.get("schemaVersion") != 1 or str(candidate_scenario.get("id", "")).is_empty() or candidate_scenario.get("plates", []).size() != 4 or candidate_lessons.get("lessons", []).size() < 4 or candidate_sources.get("entries", []).is_empty():
 		return false
 	var seen: Array = []
 	for plate in candidate_scenario.plates:

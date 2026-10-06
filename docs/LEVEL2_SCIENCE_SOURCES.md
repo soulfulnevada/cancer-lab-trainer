@@ -1,6 +1,6 @@
 # Level 2 science sources and limits
 
-The Level 2 model cites the Bio-Rad [pGLO bacterial transformation kit student manual](https://www.bio-rad.com/webroot/web/pdf/lse/literature/10048976.pdf) for broad instructional concepts: selection, arabinose-associated GFP expression, and excitation-view fluorescence. Course PDF 04 slides and PDF 01 handout are referenced as course materials but are neither bundled nor copied.
+The Level 2 model cites the Bio-Rad [pGLO bacterial transformation kit student manual](https://www.bio-rad.com/webroot/web/pdf/lse/literature/10048976.pdf) for broad instructional concepts: selection, arabinose-associated GFP expression, and excitation-view fluorescence.
 
 The original PBAD/AraC diagram represents a conceptual relation: arabinose-associated regulation can permit GFP expression, while ampicillin resistance is a separate plasmid function. The model does not teach a transformation procedure, temperatures, durations, concentrations, colony counts, or safety instructions.
 
