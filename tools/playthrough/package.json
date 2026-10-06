@@ -1,0 +1,13 @@
+{
+  "name": "cancer-lab-playthrough",
+  "private": true,
+  "type": "module",
+  "description": "Automated browser playthrough and accessibility scan for the web build.",
+  "scripts": {
+    "playthrough": "node run.mjs"
+  },
+  "devDependencies": {
+    "axe-core": "4.14.0",
+    "playwright-core": "1.63.0"
+  }
+}

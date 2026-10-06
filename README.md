@@ -45,6 +45,18 @@ dotnet run --project tests/Transformation.Tests.csproj
 
 The browser models replay the generated C# oracle with complete snapshots, reports, feedback, action ledgers, persistence checks, and rejected actions. The generated oracle JSON is intentionally excluded from public source staging; its reviewed hash is retained in [the parity test notes](tests/parity/README.md).
 
+## Automated playthrough
+
+`tools/playthrough` plays both levels in both modes in a local build using the installed Microsoft Edge, saves a screenshot at every phase change, and runs an axe-core WCAG 2.1 A/AA scan on each captured screen:
+
+```powershell
+cd tools/playthrough
+npm ci
+node run.mjs --build ../../dist/web/<release-id>/game
+```
+
+The report is written to `dist/playthrough/index.html`. See [the 2026-10-06 playthrough record](docs/validation/web-playthrough-2026-10-06.md) for what it covers and what still needs people.
+
 ## Sources and notices
 
 Read the [science and source boundaries](docs/science-and-sources.md) and the [Level 2 source notes](docs/LEVEL2_SCIENCE_SOURCES.md). Project licensing is [MIT](LICENSE); [NOTICE](NOTICE) and [third-party notices](THIRD_PARTY_NOTICES.md) identify retained Godot and .NET notices.

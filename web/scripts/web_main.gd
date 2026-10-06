@@ -1,7 +1,7 @@
 extends Node
 
 # Browser controller: the GDScript simulations remain the only science/state authority.
-const WEB_VERSION := "1.2.1-web.3"
+const WEB_VERSION := "1.2.1-web.4"
 const LabWorld := preload("res://scripts/ui/lab_world.gd")
 
 var level := ""

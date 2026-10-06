@@ -26,3 +26,4 @@ local-test-logs/
 captures/
 caches/
 *.local.log
+node_modules/

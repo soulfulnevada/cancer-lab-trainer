@@ -43,6 +43,9 @@
     "scripts/web/*.gd",
     "scripts/web/*.json",
     "scripts/web/stage-public.py",
+    "tools/playthrough/run.mjs",
+    "tools/playthrough/package.json",
+    "tools/playthrough/package-lock.json",
     "docs/LICENSE-GODOT.txt",
     "docs/COPYRIGHT-GODOT.txt",
     "docs/LICENSE-DOTNET.txt",
@@ -51,6 +54,7 @@
     "docs/LEVEL2_SCIENCE_SOURCES.md",
     "docs/validation/web-publishing-readiness-2026-09-28.md",
     "docs/validation/web-narrator-checklist.md",
+    "docs/validation/web-playthrough-2026-10-06.md",
     ".github/workflows/web.yml"
   ]
 }
