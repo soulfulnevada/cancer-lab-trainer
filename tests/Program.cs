@@ -43,6 +43,10 @@ var tests = new (string Name, Action Body)[]
     ,("assessment defers fast-release coaching", AssessmentDefersFastReleaseCoaching)
     ,("pipetting-quality teaching keeps guidance optional and assessment defers it", PipettingQualityTeachingKeepsGuidanceOptionalAndAssessmentDefersIt)
     ,("saved source manifests preserve legacy absence of the SOP entry", SavedSourceManifestsPreserveLegacyAbsenceOfSopEntry)
+    ,("invalid blank or vehicle reference withholds the percentage", InvalidReferenceWithholdsPercentage)
+    ,("guided practice names the reasons a run cannot support a conclusion", GuidedNamesSupportProblems)
+    ,("check answers open at the right stage and keep the first answer", CheckAnswersFollowStagesAndKeepFirstAnswer)
+    ,("model 1.1.0 saves without check answers still restore", LegacyModelSaveRestores)
 };
 var failures = new List<string>();
 foreach (var test in tests)
@@ -95,8 +99,11 @@ static void ValidWorkflowProducesSupportedObservation()
 }
 static void MissingControlBlocksConclusion()
 {
-    var sim = NewSimulation(); Prepare(sim); TransferAll(sim, ["B3"]); Measure(sim); var result = sim.Submit(new(LabActionType.DecideSupportedConclusion));
-    Assert(!sim.BuildReport().CanSupportConclusion, "missing vehicle control must block conclusion"); Assert(result.Accepted, "attempt must be preserved for debrief");
+    var guided = NewSimulation(); Prepare(guided); TransferAll(guided, ["B3"]); Measure(guided); var refused = guided.Submit(new(LabActionType.DecideSupportedConclusion));
+    Assert(!guided.BuildReport().CanSupportConclusion, "missing vehicle control must block conclusion");
+    Assert(!refused.Accepted && guided.Snapshot().InterpretationDecision is null, "Guided Practice must refuse an unsupported conclusion without recording it");
+    var assessed = NewSimulation(); Prepare(assessed, RunMode.Assessment); TransferAll(assessed, ["B3"]); Measure(assessed); var recorded = assessed.Submit(new(LabActionType.DecideSupportedConclusion));
+    Assert(recorded.Accepted && assessed.Snapshot().InterpretationDecision == "unsupported-claim", "Assessment must preserve the unsupported claim for debrief");
 }
 static void WrongReaderModeBlocksConclusion()
 {
@@ -393,4 +400,51 @@ static void ForwardLoad(LabSimulation sim, string source)
 static void CompleteForwardTransfer(LabSimulation sim, string well)
 {
     Assert(sim.Submit(new(LabActionType.MoveToDestination, well)).Accepted, "destination should bind"); Assert(sim.Submit(new(LabActionType.PressFirstStop)).Accepted, "destination first stop should transfer nominal quantity"); Assert(sim.Submit(new(LabActionType.PressSecondStop)).Accepted, "second stop should clear the cycle"); Assert(sim.Submit(new(LabActionType.WithdrawAndRelease)).Accepted, "withdraw/release should return to air");
+}
+static void InvalidReferenceWithholdsPercentage()
+{
+    var sim = NewSimulation(); Prepare(sim); TransferAll(sim, ["B3"]); Measure(sim);
+    var report = sim.BuildReport();
+    Assert(!report.ControlsValid && report.Wells.All(w => w.RelativeToVehicle is null), "an invalid vehicle reference must not produce any percentage of vehicle");
+    Assert(report.Wells.Single(w => w.Well == "B5").BackgroundAdjusted is not null, "background-adjusted readings remain visible as observations");
+    var valid = NewSimulation(); Prepare(valid); TransferAll(valid); Measure(valid);
+    Assert(valid.BuildReport().Wells.All(w => w.RelativeToVehicle is not null), "a valid reference keeps the percentage");
+}
+static void GuidedNamesSupportProblems()
+{
+    var sim = NewSimulation(); Prepare(sim); TransferAll(sim); sim.Submit(new(LabActionType.LoadPlate, "rotated")); sim.Submit(new(LabActionType.ConfigureReader, "Luminescence")); sim.Submit(new(LabActionType.RunReader));
+    var review = sim.Submit(new(LabActionType.ReviewResults));
+    Assert(review.Message.Contains("the plate orientation is incorrect", StringComparison.Ordinal), "review must name the failed check");
+    var refused = sim.Submit(new(LabActionType.DecideSupportedConclusion));
+    Assert(!refused.Accepted && refused.Message.Contains("Escalate it for review instead", StringComparison.Ordinal), "Guided refusal must point to escalation");
+    Assert(sim.Submit(new(LabActionType.EscalateInvalidRun)).Accepted, "escalation remains available");
+}
+static void CheckAnswersFollowStagesAndKeepFirstAnswer()
+{
+    var sim = NewSimulation(); Prepare(sim); TransferAll(sim);
+    sim.Submit(new(LabActionType.LoadPlate, "correct")); sim.Submit(new(LabActionType.ConfigureReader, "Luminescence")); sim.Submit(new(LabActionType.RunReader));
+    Assert(!sim.Submit(new(LabActionType.AnswerCheck, "confirm-observation:biological-and-orthogonal")).Accepted, "checks open only after results are reviewed");
+    sim.Submit(new(LabActionType.ReviewResults)); sim.Submit(new(LabActionType.DecideSupportedConclusion));
+    Assert(sim.Submit(new(LabActionType.AnswerCheck, "confirm-observation:reread-plate")).Accepted, "follow-up check opens after review");
+    Assert(!sim.Submit(new(LabActionType.AnswerCheck, "confirm-observation:biological-and-orthogonal")).Accepted, "the first answer is kept");
+    Assert(!sim.Submit(new(LabActionType.AnswerCheck, "atp-limits:lower-signal-only")).Accepted, "debrief checks wait for completion");
+    foreach (var type in new[] { LabActionType.SortWaste, LabActionType.CleanBench, LabActionType.RecordHandoff }) sim.Submit(new(type));
+    Assert(sim.Submit(new(LabActionType.AnswerCheck, "atp-limits:lower-signal-only")).Accepted, "debrief checks open once complete");
+    Assert(!sim.Submit(new(LabActionType.AnswerCheck, "atp-limits:not-an-option")).Accepted && !sim.Submit(new(LabActionType.AnswerCheck, "unknown:x")).Accepted, "unknown questions and options are rejected");
+    Assert(!sim.Submit(new(LabActionType.SortWaste)).Accepted, "a completed attempt stays locked for everything except checks");
+    var answers = sim.BuildReport().CheckAnswers;
+    Assert(answers.Count == 2 && !answers[0].Correct && answers[1].Correct, "report records each first answer and whether it was correct");
+    Assert(sim.BuildReport().Lessons.All(l => l.Title != "Check your understanding"), "check answers do not add science-review lessons");
+    var restored = LabSimulation.Restore(sim.Save());
+    Assert(restored.Save() == sim.Save(), "answers replay from the ledger");
+}
+static void LegacyModelSaveRestores()
+{
+    var sim = NewSimulation(); Prepare(sim); TransferAll(sim); Measure(sim); sim.Submit(new(LabActionType.DecideSupportedConclusion));
+    var node = System.Text.Json.Nodes.JsonNode.Parse(sim.Save())!;
+    node["ModelVersion"] = "1.1.0";
+    node["Snapshot"]!.AsObject().Remove("CheckAnswers");
+    node["Rules"]!.AsObject().Remove("ComprehensionChecks");
+    var restored = LabSimulation.Restore(node.ToJsonString());
+    Assert(restored.Snapshot().Phase == sim.Snapshot().Phase && restored.BuildReport().Wells.Select(w => w.RelativeToVehicle).SequenceEqual(sim.BuildReport().Wells.Select(w => w.RelativeToVehicle)), "a valid 1.1.0 save must resume with the same results");
 }

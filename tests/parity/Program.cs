@@ -45,7 +45,10 @@ static object RunLevel1Trace(string root, RunMode mode)
         Record(sim, trace, new(LabActionType.MoveToDestination, well)); Record(sim, trace, new(LabActionType.PressFirstStop)); Record(sim, trace, new(LabActionType.PressSecondStop)); Record(sim, trace, new(LabActionType.WithdrawAndRelease)); Record(sim, trace, new(LabActionType.EjectTip));
     }
     Record(sim, trace, new(LabActionType.LoadPlate, "correct")); Record(sim, trace, new(LabActionType.ConfigureReader, "Luminescence")); Record(sim, trace, new(LabActionType.RunReader));
-    Record(sim, trace, new(LabActionType.ReviewResults)); Record(sim, trace, new(LabActionType.DecideSupportedConclusion)); Record(sim, trace, new(LabActionType.SortWaste)); Record(sim, trace, new(LabActionType.CleanBench)); Record(sim, trace, new(LabActionType.RecordHandoff));
+    Record(sim, trace, new(LabActionType.ReviewResults)); Record(sim, trace, new(LabActionType.DecideSupportedConclusion));
+    Record(sim, trace, new(LabActionType.AnswerCheck, "confirm-observation:biological-and-orthogonal"));
+    Record(sim, trace, new(LabActionType.SortWaste)); Record(sim, trace, new(LabActionType.CleanBench)); Record(sim, trace, new(LabActionType.RecordHandoff));
+    foreach (var answer in new[] { "atp-limits:cells-died", "controls:reference", "replicates:technical", "matched-wells:lysis", "controls:paperwork", "unknown:x" }) Record(sim, trace, new(LabActionType.AnswerCheck, answer));
     var save = sim.Save();
     return new { trace, report = sim.BuildReport(), replayIdentical = LabSimulation.Restore(save).Save() == save, tamperRejected = Rejects(() => LabSimulation.Restore(save.Replace(sim.Snapshot().AttemptId, "../../outside", StringComparison.Ordinal)))};
 }
@@ -53,7 +56,8 @@ static object RunLevel1Trace(string root, RunMode mode)
 static object RunLevel1Edges(string root) => new Dictionary<string, object>
 {
     ["guidedRecovery"] = RunGuidedRecoveryTrace(root),
-    ["assessmentInvalidRun"] = RunAssessmentInvalidTrace(root)
+    ["assessmentInvalidRun"] = RunAssessmentInvalidTrace(root),
+    ["guidedInvalidRun"] = RunGuidedInvalidTrace(root)
 };
 
 static object RunCSharpPersistenceSamples(string root)
@@ -155,6 +159,32 @@ static object RunAssessmentInvalidTrace(string root)
     Record(sim, trace, new(LabActionType.SortWaste));
     Record(sim, trace, new(LabActionType.CleanBench));
     Record(sim, trace, new(LabActionType.RecordHandoff));
+    var save = sim.Save();
+    return new { trace, report = sim.BuildReport(), replayIdentical = LabSimulation.Restore(save).Save() == save };
+}
+
+static object RunGuidedInvalidTrace(string root)
+{
+    // Missing vehicle well B4 and a rotated plate: the percentage is withheld, Guided refuses the
+    // conclusion with named reasons, and escalation plus check answers complete the attempt.
+    var sim = LabSimulation.FromJsonDocuments(Read(root, "scenario.v1.json"), Read(root, "rules.v1.json"), Read(root, "sources.v1.json"));
+    var trace = new List<object>();
+    trace.Add(new { start = sim.Start(RunMode.GuidedPractice), report = sim.BuildReport() });
+    foreach (var action in new[] { LabActionType.WearPpe, LabActionType.DisinfectBench, LabActionType.CheckMaterials, LabActionType.VerifyLabels, LabActionType.ReviewPlateMap }) Record(sim, trace, new(action));
+    foreach (var (well, role) in new[] { ("B1", "Blank"), ("B2", "Blank"), ("B3", "Vehicle control"), ("B5", "Fictional treatment"), ("B6", "Fictional treatment") })
+    {
+        Record(sim, trace, new(LabActionType.AttachTip)); Record(sim, trace, new(LabActionType.SetVolume, Value: 50)); Record(sim, trace, new(LabActionType.SelectSource, role));
+        Record(sim, trace, new(LabActionType.PressFirstStop)); Record(sim, trace, new(LabActionType.MoveToSource, role)); Record(sim, trace, new(LabActionType.ReleaseSlow));
+        Record(sim, trace, new(LabActionType.MoveToDestination, well)); Record(sim, trace, new(LabActionType.PressFirstStop)); Record(sim, trace, new(LabActionType.PressSecondStop)); Record(sim, trace, new(LabActionType.WithdrawAndRelease)); Record(sim, trace, new(LabActionType.EjectTip));
+    }
+    Record(sim, trace, new(LabActionType.LoadPlate, "rotated")); Record(sim, trace, new(LabActionType.ConfigureReader, "Luminescence")); Record(sim, trace, new(LabActionType.RunReader));
+    Record(sim, trace, new(LabActionType.AnswerCheck, "confirm-observation:reread-plate"));
+    Record(sim, trace, new(LabActionType.ReviewResults)); Record(sim, trace, new(LabActionType.DecideSupportedConclusion)); Record(sim, trace, new(LabActionType.EscalateInvalidRun));
+    Record(sim, trace, new(LabActionType.AnswerCheck, "atp-limits:lower-signal-only"));
+    Record(sim, trace, new(LabActionType.AnswerCheck, "confirm-observation:reread-plate"));
+    Record(sim, trace, new(LabActionType.AnswerCheck, "confirm-observation"));
+    Record(sim, trace, new(LabActionType.SortWaste)); Record(sim, trace, new(LabActionType.CleanBench)); Record(sim, trace, new(LabActionType.RecordHandoff));
+    Record(sim, trace, new(LabActionType.AnswerCheck, "atp-limits:lower-signal-only"));
     var save = sim.Save();
     return new { trace, report = sim.BuildReport(), replayIdentical = LabSimulation.Restore(save).Save() == save };
 }

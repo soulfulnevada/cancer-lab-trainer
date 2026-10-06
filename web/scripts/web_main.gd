@@ -1,7 +1,7 @@
 extends Node
 
 # Browser controller: the GDScript simulations remain the only science/state authority.
-const WEB_VERSION := "1.2.1-web.2"
+const WEB_VERSION := "1.2.1-web.3"
 const LabWorld := preload("res://scripts/ui/lab_world.gd")
 
 var level := ""
@@ -221,7 +221,7 @@ func _render_run() -> void:
 
 func _display_state(state: Dictionary) -> Dictionary:
 	if level == "level1":
-		return {"pipetteStage":state.get("pipetteStage"), "tipAttached":state.get("tipAttached"), "tipId":state.get("tipId"), "selectedVolumeUl":state.get("selectedVolumeUl"), "targetVolumeUl":level1.scenario.get("toyTransferVolumeUl"), "sourceRemainingVolumeUl":state.get("sourceRemainingVolumeUl"), "selectedSource":state.get("selectedSource"), "boundDestination":state.get("boundDestination"), "readerRan":state.get("readerRan"), "plateLoaded":state.get("plateLoaded"), "correctOrientation":state.get("correctOrientation"), "readerConfigured":state.get("readerConfigured"), "resultsReviewed":state.get("resultsReviewed"), "attempt":state.get("attemptNumber"), "ppeWorn":state.get("ppeWorn"), "benchDisinfected":state.get("benchDisinfected"), "materialsChecked":state.get("materialsChecked"), "labelsVerified":state.get("labelsVerified"), "plateMapReviewed":state.get("plateMapReviewed"), "tipContaminationRole":state.get("tipContaminationRole")}
+		return {"pipetteStage":state.get("pipetteStage"), "tipAttached":state.get("tipAttached"), "tipId":state.get("tipId"), "selectedVolumeUl":state.get("selectedVolumeUl"), "targetVolumeUl":level1.scenario.get("toyTransferVolumeUl"), "sourceRemainingVolumeUl":state.get("sourceRemainingVolumeUl"), "selectedSource":state.get("selectedSource"), "boundDestination":state.get("boundDestination"), "readerRan":state.get("readerRan"), "plateLoaded":state.get("plateLoaded"), "correctOrientation":state.get("correctOrientation"), "readerConfigured":state.get("readerConfigured"), "resultsReviewed":state.get("resultsReviewed"), "attempt":state.get("attemptNumber"), "ppeWorn":state.get("ppeWorn"), "benchDisinfected":state.get("benchDisinfected"), "materialsChecked":state.get("materialsChecked"), "labelsVerified":state.get("labelsVerified"), "plateMapReviewed":state.get("plateMapReviewed"), "tipContaminationRole":state.get("tipContaminationRole"), "controlsValid":state.get("controlsValid"), "checks":level1.rules.get("comprehensionChecks", []), "checkAnswers":state.get("checkAnswers", [])}
 	var case_choices: Array = []
 	for definition in level2.cases.get("cases", []):
 		case_choices.append({"id":definition.get("id", ""), "title":definition.get("title", "Lab Detective case")})
@@ -264,9 +264,9 @@ func _json_export(report: Dictionary) -> String:
 	return JSON.stringify({"exportEnvelope":"webExportEnvelope1", "webProvenance":{"webAppVersion":WEB_VERSION, "webEnvelope":"webEnvelope1", "level":level, "modelVersion":report.get("modelVersion", ""), "saveFormatVersion":_report_save_format(report)}, "report":report}, "", true, true)
 
 func _csv(report: Dictionary) -> String:
-	var metadata := ["web_app=" + WEB_VERSION, "web_envelope=webEnvelope1", "level=" + level, "model=" + str(report.get("modelVersion", "")), "save_format=" + str(_save_format_version()), "mode=" + str(report.get("mode", "")), "attempt=" + str(report.get("attemptId", "")), "scenario_seed=" + str(report.get("scenarioSeed", "")), "retry_parent=" + str(report.get("retryOfAttemptId", ""))]
+	var metadata := ["web_app=" + WEB_VERSION, "web_envelope=webEnvelope1", "level=" + level, "model=" + str(report.get("modelVersion", "")), "save_format=" + str(_save_format_version()), "mode=" + str(report.get("mode", "")), "attempt=" + str(report.get("attemptId", "")), "scenario_seed=" + (str(int(report.scenarioSeed)) if typeof(report.get("scenarioSeed")) in [TYPE_INT, TYPE_FLOAT] else str(report.get("scenarioSeed", ""))), "retry_parent=" + str(report.get("retryOfAttemptId", ""))]
 	if level == "level2":
-		var level2_lines := ["# " + ",".join(metadata), "section,plate,label,tube,medium,growth,fluorescence,original_growth_prediction,original_fluorescence_prediction,revisions"]
+		var level2_lines := ["# " + ",".join(metadata), "# " + FICTIONAL_NOTICE, "section,plate,label,tube,medium,growth,fluorescence,original_growth_prediction,original_fluorescence_prediction,revisions"]
 		var predictions: Dictionary = {}
 		for prediction in report.get("predictions", []): predictions[prediction.get("plateId", "")] = prediction
 		for plate in report.get("plates", []):
@@ -293,17 +293,43 @@ func _csv(report: Dictionary) -> String:
 		level2_lines.append(_csv_row(["scientific-limit", "limits", report.get("limits", "")]))
 		for source in report.get("sources", []): level2_lines.append(_csv_row(["source", source.get("id", ""), source.get("label", source.get("title", "")), source.get("url", "")]))
 		return "\n".join(level2_lines)
-	var lines := ["# " + ",".join(metadata), "section,well,role,transfer_volume_ul,raw_illustrative_signal,background_adjusted,relative_to_vehicle_percent"]
+	var lines := ["# " + ",".join(metadata), "# " + FICTIONAL_NOTICE, "section,well,role,transfer_volume_ul,fictional_raw_signal,fictional_background_adjusted,fictional_percent_of_vehicle"]
 	for well in report.get("wells", []):
-		lines.append(_csv_row(["well", well.get("well", ""), well.get("role", ""), well.get("transferVolumeUl", ""), well.get("rawReading", ""), well.get("backgroundAdjusted", ""), well.get("relativeToVehicle", "")]))
+		lines.append(_csv_row(["well", well.get("well", ""), well.get("role", ""), well.get("transferVolumeUl", ""), well.get("rawReading", ""), well.get("backgroundAdjusted", ""), _relative_text(well)]))
 	lines.append("section,field,value")
 	for replicate in report.get("replicates", []): lines.append(_csv_row(["replicate", replicate.get("role", ""), "n=%s;mean=%s;cv_percent=%s" % [replicate.get("count", ""), replicate.get("mean", ""), replicate.get("cvPercent", "")]]))
 	for issue in report.get("issues", []): lines.append(_csv_row(["issue", issue.get("code", ""), JSON.stringify(issue, "", false, true)]))
 	for key in report.get("categoryStatus", {}): lines.append(_csv_row(["category", key, report.categoryStatus[key]]))
+	for row in _check_rows(report): lines.append(_csv_row(["check-answer", row.id, "%s | correct=%s" % [row.answer, row.correct]]))
 	lines.append(_csv_row(["conclusion", "interpretation", report.get("conclusion", "")]))
 	lines.append(_csv_row(["scientific-limit", "limits", report.get("scientificLimit", "")]))
 	for source in report.get("sources", []): lines.append(_csv_row(["source", source.get("id", ""), source.get("label", source.get("title", "")), source.get("url", "")]))
 	return "\n".join(lines)
+
+const FICTIONAL_NOTICE := "FICTIONAL TRAINING DATA: illustrative values from a teaching model, not laboratory results."
+const NOT_CALCULATED := "not calculated: invalid blank/vehicle reference"
+const OBSERVATION_LABELS := {"NotViewed":"Not viewed", "NoneDetected":"Not detected", "NoColoniesToAssess":"No colonies to assess", "NotAssessable":"Not assessable", "NotSure":"Not sure"}
+
+func _obs(value: Variant) -> String:
+	return str(OBSERVATION_LABELS.get(str(value), value))
+
+func _relative_text(well: Dictionary) -> String:
+	if well.get("relativeToVehicle") != null: return str(well.relativeToVehicle)
+	return "" if well.get("rawReading") == null else NOT_CALCULATED
+
+func _check_rows(report: Dictionary) -> Array:
+	# Pairs each recorded answer with its question so exports read without the app.
+	var rows: Array = []
+	var checks: Dictionary = {}
+	var rules: Dictionary = level1.rules if level1 != null else {}
+	for check in rules.get("comprehensionChecks", []): checks[check.id] = check
+	for answer in report.get("checkAnswers", []):
+		var check: Dictionary = checks.get(answer.get("questionId", ""), {})
+		var chosen := str(answer.get("optionId", ""))
+		for option in check.get("options", []):
+			if option.id == chosen: chosen = str(option.text)
+		rows.append({"id":answer.get("questionId", ""), "prompt":check.get("prompt", answer.get("questionId", "")), "answer":chosen, "correct":bool(answer.get("correct", false))})
+	return rows
 
 func _save_format_version() -> int:
 	return 3 if level == "level1" else 1
@@ -318,7 +344,7 @@ func _csv_row(values: Array) -> String:
 	return ",".join(cells)
 
 func _csv_cell(value: Variant) -> String:
-	var text := str(value)
+	var text := "" if value == null else str(value)
 	if typeof(value) == TYPE_STRING and (text.lstrip(" \t").begins_with("=") or text.lstrip(" \t").begins_with("+") or text.lstrip(" \t").begins_with("-") or text.lstrip(" \t").begins_with("@")):
 		text = "'" + text
 	return "\"%s\"" % text.replace("\"", "\"\"")
@@ -327,10 +353,10 @@ func _html(report: Dictionary) -> String:
 	var title := "Cancer Lab Trainer browser debrief"
 	if level == "level2":
 		return _level2_html(report, title)
-	var heading := "Illustrative readings" if level == "level1" else "Conceptual plate observations"
+	var heading := "Fictional readings (training data, not laboratory results)" if level == "level1" else "Conceptual plate observations"
 	var rows: Array = []
 	if level == "level1":
-		for well in report.get("wells", []): rows.append("<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % [str(well.get("well", "")).xml_escape(), str(well.get("role", "")).xml_escape(), str(well.get("transferVolumeUl", "")).xml_escape(), str(well.get("rawReading", "")).xml_escape(), str(well.get("backgroundAdjusted", "")).xml_escape(), str(well.get("relativeToVehicle", "")).xml_escape()])
+		for well in report.get("wells", []): rows.append("<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % [str(well.get("well", "")).xml_escape(), str(well.get("role", "")).xml_escape(), str(well.get("transferVolumeUl", "")).xml_escape(), str(well.get("rawReading", "")).xml_escape(), str(well.get("backgroundAdjusted", "")).xml_escape(), _relative_text(well).xml_escape()])
 	else:
 		for plate in report.get("plates", []): rows.append("<tr><td>%s</td><td>%s</td><td>%s / %s</td><td>%s</td><td>%s</td></tr>" % [str(plate.get("id", "")).xml_escape(), str(plate.get("label", "")).xml_escape(), str(plate.get("tubeLabel", "")).xml_escape(), str(plate.get("medium", "")).xml_escape(), str(plate.get("growth", "")).xml_escape(), str(plate.get("fluorescence", "")).xml_escape()])
 	var categories := ""
@@ -349,10 +375,13 @@ func _html(report: Dictionary) -> String:
 	for item in report.get("tubeSetupCorrections", []) + report.get("plateAssignmentCorrections", []) + report.get("prelockPredictionCorrections", []): corrections += "<li>%s</li>" % str(item).xml_escape()
 	var replicate_text := ""
 	for replicate in report.get("replicates", []): replicate_text += "<li>%s: n=%s; mean=%s; CV=%s%%</li>" % [str(replicate.get("role", "")).xml_escape(), str(replicate.get("count", "")).xml_escape(), str(replicate.get("mean", "")).xml_escape(), str(replicate.get("cvPercent", "")).xml_escape()]
+	var checks_html := ""
+	for row in _check_rows(report): checks_html += "<li><strong>%s</strong> %s (%s)</li>" % [str(row.prompt).xml_escape(), str(row.answer).xml_escape(), "correct" if row.correct else "not the best answer"]
+	if not checks_html.is_empty(): checks_html = "<h2>Check questions</h2><ul>%s</ul>" % checks_html
 	var quality: Variant = ""
 	if level == "level1": quality = PipettingQualityTeaching.html_card(level1.sources.entries)
-	var table_header := "<th>Well</th><th>Role</th><th>Transfer</th><th>Raw</th><th>Background-adjusted</th><th>Relative</th>" if level == "level1" else "<th>Plate</th><th>Label</th><th>Tube / medium</th><th>Growth</th><th>Fluorescence</th>"
-	return "<!doctype html><meta charset=\"utf-8\"><title>%s</title><style>body{font-family:system-ui;max-width:900px;margin:2rem auto;padding:0 1rem}table{border-collapse:collapse;width:100%%}th,td{border:1px solid #789;padding:.4rem;text-align:left}</style><h1>%s</h1><p>Web app %s · web envelope webEnvelope1 · level %s · model %s · save format %s · mode %s · attempt %s · seed %s</p><h2>Outcome and limits</h2><p>%s</p><p>%s</p><h2>Assessment record</h2><ul>%s</ul><h2>%s</h2><table><tr>%s</tr>%s</table><h2>Replicate variation</h2><ul>%s</ul><h2>Evidence and decisions</h2><ul>%s%s</ul><h2>Corrections and retained history</h2><ul>%s</ul><h2>Science review</h2>%s%s<h2>Sources</h2><ul>%s</ul>" % [title, title, WEB_VERSION, level, str(report.get("modelVersion", "")).xml_escape(), str(_report_save_format(report)).xml_escape(), str(report.get("mode", "")).xml_escape(), str(report.get("attemptId", "")).xml_escape(), str(report.get("scenarioSeed", "")).xml_escape(), str(report.get("conclusion", "Conceptual debrief complete.")).xml_escape(), str(report.get("scientificLimit", report.get("limits", "Illustrative training only."))).xml_escape(), categories, heading, table_header, "".join(rows), replicate_text, evidence, decisions, corrections, lessons, quality, sources]
+	var table_header := "<th>Well</th><th>Role</th><th>Transfer</th><th>Raw (fictional)</th><th>Background-adjusted (fictional)</th><th>% of vehicle (fictional)</th>" if level == "level1" else "<th>Plate</th><th>Label</th><th>Tube / medium</th><th>Growth</th><th>Fluorescence</th>"
+	return "<!doctype html><meta charset=\"utf-8\"><title>%s</title><style>body{font-family:system-ui;max-width:900px;margin:2rem auto;padding:0 1rem}table{border-collapse:collapse;width:100%%}th,td{border:1px solid #789;padding:.4rem;text-align:left}</style><h1>%s</h1><p>Web app %s · web envelope webEnvelope1 · level %s · model %s · save format %s · mode %s · attempt %s · seed %s</p><p><strong>%s</strong></p><h2>Outcome and limits</h2><p>%s</p><p>%s</p><h2>Assessment record</h2><ul>%s</ul><h2>%s</h2><p>ATP-associated light is an indirect, viability-related signal. A lower value can reflect fewer cells, less ATP per cell, or assay interference; it is not proof that cells died.</p><table><tr>%s</tr>%s</table><h2>Replicate variation</h2><ul>%s</ul><p>Paired wells are technical replicates from one preparation; only independent biological preparations could show that a difference holds up.</p>%s<h2>Evidence and decisions</h2><ul>%s%s</ul><h2>Corrections and retained history</h2><ul>%s</ul><h2>Science review</h2>%s%s<h2>Sources</h2><ul>%s</ul>" % [title, title, WEB_VERSION, level, str(report.get("modelVersion", "")).xml_escape(), str(_report_save_format(report)).xml_escape(), str(report.get("mode", "")).xml_escape(), str(report.get("attemptId", "")).xml_escape(), str(report.get("scenarioSeed", "")).xml_escape(), FICTIONAL_NOTICE, str(report.get("conclusion", "Conceptual debrief complete.")).xml_escape(), str(report.get("scientificLimit", report.get("limits", "Illustrative training only."))).xml_escape(), categories, heading, table_header, "".join(rows), replicate_text, checks_html, evidence, decisions, corrections, lessons, quality, sources]
 
 func _level2_html(report: Dictionary, title: String) -> String:
 	var rows := ""
@@ -360,13 +389,13 @@ func _level2_html(report: Dictionary, title: String) -> String:
 	for prediction in report.get("predictions", []): prediction_by_plate[prediction.get("plateId", "")] = prediction
 	for plate in report.get("plates", []):
 		var prediction: Dictionary = prediction_by_plate.get(plate.get("id", ""), {})
-		rows += "<tr><td>%s</td><td>%s</td><td>%s / %s</td><td>%s</td><td>%s</td><td>%s / %s</td></tr>" % [str(plate.get("id", "")).xml_escape(), str(plate.get("label", "")).xml_escape(), str(plate.get("tubeLabel", "")).xml_escape(), str(plate.get("medium", "")).xml_escape(), str(prediction.get("originalGrowthPrediction", "")).xml_escape(), str(prediction.get("originalFluorescencePrediction", "")).xml_escape(), str(plate.get("growth", "")).xml_escape(), str(plate.get("fluorescence", "")).xml_escape()]
+		rows += "<tr><td>%s</td><td>%s</td><td>%s / %s</td><td>%s</td><td>%s</td><td>%s / %s</td></tr>" % [str(plate.get("id", "")).xml_escape(), str(plate.get("label", "")).xml_escape(), str(plate.get("tubeLabel", "")).xml_escape(), str(plate.get("medium", "")).xml_escape(), _obs(prediction.get("originalGrowthPrediction", "")).xml_escape(), _obs(prediction.get("originalFluorescencePrediction", "")).xml_escape(), _obs(plate.get("growth", "")).xml_escape(), _obs(plate.get("fluorescence", "")).xml_escape()]
 	var claims := "<li>Main selection: %s — %s</li><li>Main expression: %s — %s</li>" % [str(report.get("mainSelectionClaimSupported", false)).xml_escape(), str(report.get("claimReasons", {}).get("main-selection", "")).xml_escape(), str(report.get("mainExpressionClaimSupported", false)).xml_escape(), str(report.get("claimReasons", {}).get("main-expression", "")).xml_escape()]
 	var case_text := ""
 	var diagnostic: Dictionary = report.get("diagnosticCase", {})
 	if not diagnostic.is_empty(): case_text = "<h2>%s</h2><p>%s</p><p>Selection: %s — %s</p><p>Expression: %s — %s</p>" % [str(diagnostic.get("title", "Lab Detective debrief")).xml_escape(), str(diagnostic.get("finalFictionalCause", "")).xml_escape(), str(diagnostic.get("selectionClaimSupported", false)).xml_escape(), str(diagnostic.get("selectionClaimReason", "")).xml_escape(), str(diagnostic.get("expressionClaimSupported", false)).xml_escape(), str(diagnostic.get("expressionClaimReason", "")).xml_escape()]
 	var case_rows := ""
-	for plate in report.get("caseObservations", []): case_rows += "<tr><td>%s</td><td>%s</td><td>%s / %s</td></tr>" % [str(plate.get("id", "")).xml_escape(), str(plate.get("label", "")).xml_escape(), str(plate.get("growth", "")).xml_escape(), str(plate.get("fluorescence", "")).xml_escape()]
+	for plate in report.get("caseObservations", []): case_rows += "<tr><td>%s</td><td>%s</td><td>%s / %s</td></tr>" % [str(plate.get("id", "")).xml_escape(), str(plate.get("label", "")).xml_escape(), _obs(plate.get("growth", "")).xml_escape(), _obs(plate.get("fluorescence", "")).xml_escape()]
 	if not case_rows.is_empty(): case_text += "<h2>Case observations</h2><table><tr><th>Plate</th><th>Label</th><th>Observed state</th></tr>%s</table>" % case_rows
 	var setup_text := ""
 	for key in report.get("caseSetup", {}): setup_text += "<li>%s: %s</li>" % [str(key).xml_escape(), JSON.stringify(report.caseSetup[key], "", false, true).xml_escape()]
@@ -392,7 +421,7 @@ func _level2_html(report: Dictionary, title: String) -> String:
 	for source in report.get("sources", []):
 		var url := str(source.get("url", ""))
 		sources += "<li>%s%s</li>" % [str(source.get("label", source.get("id", "Source"))).xml_escape(), (" — <a href=\"%s\">source</a>" % url.xml_escape(true)) if url.begins_with("https://") else ""]
-	return "<!doctype html><meta charset=\"utf-8\"><title>%s</title><style>body{font-family:system-ui;max-width:1000px;margin:2rem auto;padding:0 1rem}table{border-collapse:collapse;width:100%%}th,td{border:1px solid #789;padding:.4rem;text-align:left}</style><h1>%s</h1><p>Web app %s · web envelope webEnvelope1 · model %s · save format %s · mode %s · attempt %s · seed %s</p><h2>Main tube records</h2><ul>%s</ul><h2>Main four-plate record</h2><table><tr><th>Plate</th><th>Planned label</th><th>Actual assignment</th><th>Growth prediction</th><th>Fluorescence prediction</th><th>Observed state</th></tr>%s</table><h2>Claim support and limits</h2><ul>%s</ul><h2>Rubric record</h2><ul>%s</ul>%s<h2>Assistance and explanations</h2>%s<h2>Retained revisions, corrections, evidence, decisions, and ledger</h2><ul>%s</ul><h2>Scientific limit</h2><p>%s</p><h2>Sources</h2><ul>%s</ul>" % [title, title, WEB_VERSION, str(report.get("modelVersion", "")).xml_escape(), str(_report_save_format(report)).xml_escape(), str(report.get("mode", "")).xml_escape(), str(report.get("attemptId", "")).xml_escape(), str(report.get("scenarioSeed", "")).xml_escape(), tube_records, rows, claims, rubric, case_text, assistance, history, str(report.get("limits", "Illustrative training only.")).xml_escape(), sources]
+	return "<!doctype html><meta charset=\"utf-8\"><title>%s</title><style>body{font-family:system-ui;max-width:1000px;margin:2rem auto;padding:0 1rem}table{border-collapse:collapse;width:100%%}th,td{border:1px solid #789;padding:.4rem;text-align:left}</style><h1>%s</h1><p>Web app %s · web envelope webEnvelope1 · model %s · save format %s · mode %s · attempt %s · seed %s</p><p><strong>%s</strong></p><h2>Main tube records</h2><ul>%s</ul><h2>Main four-plate record</h2><table><tr><th>Plate</th><th>Planned label</th><th>Actual assignment</th><th>Growth prediction</th><th>Fluorescence prediction</th><th>Observed state</th></tr>%s</table><h2>Claim support and limits</h2><ul>%s</ul><h2>Rubric record</h2><ul>%s</ul>%s<h2>Assistance and explanations</h2>%s<h2>Retained revisions, corrections, evidence, decisions, and ledger</h2><ul>%s</ul><h2>Scientific limit</h2><p>%s</p><h2>Sources</h2><ul>%s</ul>" % [title, title, WEB_VERSION, str(report.get("modelVersion", "")).xml_escape(), str(_report_save_format(report)).xml_escape(), str(report.get("mode", "")).xml_escape(), str(report.get("attemptId", "")).xml_escape(), str(report.get("scenarioSeed", "")).xml_escape(), FICTIONAL_NOTICE, tube_records, rows, claims, rubric, case_text, assistance, history, str(report.get("limits", "Illustrative training only.")).xml_escape(), sources]
 
 func _render(payload: Dictionary) -> void:
 	if OS.has_feature("web"):

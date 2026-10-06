@@ -3,7 +3,10 @@ extends RefCounted
 
 # Browser implementation of the public LabSimulation seam. All run inputs are
 # loaded from the copied canonical definition rather than embedded in code.
-const MODEL_VERSION := "1.1.0"
+const MODEL_VERSION := "1.2.0"
+# 1.1.0 saves replay unchanged unless their controls failed after the reader ran.
+const RESTORABLE_MODEL_VERSIONS := ["1.1.0", MODEL_VERSION]
+const FLAG_LABELS := {"TransferBeforePpe":"transfer before PPE", "WrongVolume":"wrong volume", "ReaderMode":"reader mode", "Carryover":"tip carryover", "FastAspirationRelease":"fast aspiration release", "DuplicateTransfer":"duplicate transfer", "UnsupportedConclusion":"unsupported conclusion", "ReplicateVariation":"replicate spread above the QC threshold"}
 const SAVE_FORMAT := 3
 const WEB_ENVELOPE := "webEnvelope1"
 const LEVEL_ID := "level1"
@@ -25,14 +28,14 @@ func start(mode: String) -> Dictionary:
 	var wells: Array = []
 	for defined in scenario.get("activeWells", []):
 		wells.append({"well": defined.well, "role": defined.role, "expectedSignal": float(defined.expectedSignal), "transferVolumeUl": null, "tipId": null, "sourceRole": null, "carryoverFactor": 1.0, "contributionsUl": {}, "rawReading": null, "backgroundAdjusted": null, "relativeToVehicle": null})
-	state = {"scenarioId":scenario.id,"scenarioSchemaVersion":scenario.schemaVersion,"attemptId":_id(),"mode":mode,"phase":"Preparation","started":true,"ppeWorn":false,"benchDisinfected":false,"materialsChecked":false,"labelsVerified":false,"plateMapReviewed":false,"tipAttached":false,"tipId":0,"pipetteStage":"ReadyInAir","selectedVolumeUl":null,"selectedSource":null,"loadedSource":null,"boundDestination":null,"aspiratedVolumeUl":0.0,"discardedVolumeUl":0.0,"tipContaminationRole":null,"carryoverRisk":false,"sourceRemainingVolumeUl":{"Blank":250.0,"Vehicle control":250.0,"Fictional treatment":250.0},"simulatedMinutes":0,"attemptNumber":1,"ledger":[],"plateLoaded":false,"correctOrientation":false,"readerConfigured":false,"readerRan":false,"resultsReviewed":false,"escalated":false,"wasteSorted":false,"benchCleanedAtCloseout":false,"handoffRecorded":false,"controlsValid":false,"canSupportConclusion":false,"interpretationDecision":null,"wells":wells,"issues":[]}
+	state = {"scenarioId":scenario.id,"scenarioSchemaVersion":scenario.schemaVersion,"attemptId":_id(),"mode":mode,"phase":"Preparation","started":true,"ppeWorn":false,"benchDisinfected":false,"materialsChecked":false,"labelsVerified":false,"plateMapReviewed":false,"tipAttached":false,"tipId":0,"pipetteStage":"ReadyInAir","selectedVolumeUl":null,"selectedSource":null,"loadedSource":null,"boundDestination":null,"aspiratedVolumeUl":0.0,"discardedVolumeUl":0.0,"tipContaminationRole":null,"carryoverRisk":false,"sourceRemainingVolumeUl":{"Blank":250.0,"Vehicle control":250.0,"Fictional treatment":250.0},"simulatedMinutes":0,"attemptNumber":1,"ledger":[],"plateLoaded":false,"correctOrientation":false,"readerConfigured":false,"readerRan":false,"resultsReviewed":false,"escalated":false,"wasteSorted":false,"benchCleanedAtCloseout":false,"handoffRecorded":false,"controlsValid":false,"canSupportConclusion":false,"interpretationDecision":null,"wells":wells,"issues":[],"checkAnswers":[]}
 	return snapshot()
 
 func submit(action: String, target: Variant = null, value: Variant = null) -> Dictionary:
 	if not state.get("started", false): return _result(false, "Start a scenario before submitting actions.")
 	if not _action_names().has(action): return _result(false, "A recognized action is required.")
-	if state.phase == "Complete": return _result(false, "This completed attempt is locked. Start a new attempt to preserve its audit record.")
-	if state.readerRan and not ["ReviewResults", "DecideSupportedConclusion", "EscalateInvalidRun", "SortWaste", "CleanBench", "RecordHandoff"].has(action): return _result(false, "Acquired measurements are locked. Start a new attempt for a new preparation or reading.")
+	if state.phase == "Complete" and action != "AnswerCheck": return _result(false, "This completed attempt is locked. Start a new attempt to preserve its audit record.")
+	if state.readerRan and not ["ReviewResults", "DecideSupportedConclusion", "EscalateInvalidRun", "SortWaste", "CleanBench", "RecordHandoff", "AnswerCheck"].has(action): return _result(false, "Acquired measurements are locked. Start a new attempt for a new preparation or reading.")
 	if ["SortWaste", "CleanBench", "RecordHandoff"].has(action) and state.phase != "Closeout": return _result(false, "Record the result disposition before completing closeout.")
 	var result: Dictionary = _dispatch(action, target, value)
 	if result.accepted: state.simulatedMinutes += 2
@@ -41,7 +44,7 @@ func submit(action: String, target: Variant = null, value: Variant = null) -> Di
 	_update_phase()
 	var science := _science(action, result.accepted, target, value)
 	var lesson_record := {"title":science.get("title", ""), "explanation":science.get("lesson", ""), "whyItMatters":science.get("why", "")}
-	if result.accepted and not science.is_empty() and not lessons.has(lesson_record): lessons.append(lesson_record)
+	if result.accepted and action != "AnswerCheck" and not science.is_empty() and not lessons.has(lesson_record): lessons.append(lesson_record)
 	result.scienceTitle = science.get("title", "Check the workflow")
 	result.scienceLesson = science.get("lesson", "The simulation keeps actions ordered so that the next observation has context.")
 	result.whyItMatters = science.get("why", "In real work, pause and follow the local procedure when the next safe step is unclear.")
@@ -86,6 +89,7 @@ func _dispatch(action: String, target: Variant, value: Variant) -> Dictionary:
 		"SortWaste": return _once("wasteSorted", "Waste decision recorded.")
 		"CleanBench": return _once("benchCleanedAtCloseout", "Closeout cleaning recorded.")
 		"RecordHandoff": return _once("handoffRecorded", "Handoff record completed.")
+		"AnswerCheck": return _answer_check(target)
 		_: return _no("That action is not available in this version of the scenario.")
 
 func _once(field: String, message: String) -> Dictionary:
@@ -225,13 +229,19 @@ func _run() -> Dictionary:
 	var vehicle:float=_mean(vehicles); for well in state.wells: well.relativeToVehicle=_decimal(float(well.backgroundAdjusted)/vehicle*100.0,12) if vehicle>0.0 else null
 	state.readerRan=true; if state.wells.any(func(w): return w.transferVolumeUl==null): _issue("MissingControl", "Required samples or controls were not prepared. The partial plate cannot support a treatment comparison.", true, false)
 	if _replicates().any(func(r): return r.role != "Blank" and r.cvPercent != null and float(r.cvPercent) > float(rules.maxReplicateCvPercent)): _issue("ReplicateVariation", "Technical replicate spread exceeds this scenario's illustrative QC threshold.", true, false)
-	state.controlsValid=_valid(); state.canSupportConclusion=state.controlsValid and _ready() and not _critical(); return _yes("Fictional readings generated from the versioned scenario seed.")
+	state.controlsValid=_valid(); state.canSupportConclusion=state.controlsValid and _ready() and not _critical()
+	# Without a valid blank and vehicle reference the percentage has no sound basis, so it is withheld.
+	if not state.controlsValid:
+		for well in state.wells: well.relativeToVehicle = null
+	return _yes("Fictional readings generated from the versioned scenario seed." if state.controlsValid else "Fictional readings generated from the versioned scenario seed. The blank or vehicle reference is not valid, so no percentage of vehicle is calculated.")
 func _review() -> Dictionary:
 	if not state.readerRan: return _no("Run the reader before reviewing results.")
 	state.resultsReviewed=true
-	return _yes("Controls pass the fictional model’s validity checks." if state.canSupportConclusion else "The model marks this run as unsuitable for a supported conclusion.")
+	return _yes("Controls pass the fictional model’s validity checks." if state.canSupportConclusion else "The model marks this run as unsuitable for a supported conclusion: " + "; ".join(PackedStringArray(_support_problems())) + ".")
 func _decide() -> Dictionary:
 	if not state.resultsReviewed: return _no("Review the results before recording a conclusion.")
+	if not state.canSupportConclusion and state.mode == "GuidedPractice":
+		return _no("This run cannot support a conclusion: " + "; ".join(PackedStringArray(_support_problems())) + ". Escalate it for review instead.")
 	if not state.canSupportConclusion:
 		state.interpretationDecision = "unsupported-claim"
 		_issue("UnsupportedConclusion", "A supported conclusion was selected despite invalid controls or workflow conditions.", true, true)
@@ -242,13 +252,62 @@ func _escalate() -> Dictionary:
 	if not state.readerRan: return _no("Escalation is available after a measurement or documented invalid condition.")
 	state.escalated=true
 	return _yes("Run escalated for review despite passing the fictional QC checks; no conclusion will be claimed." if state.canSupportConclusion else "Invalid run escalated and preserved in the handoff record.")
+func _answer_check(target: Variant) -> Dictionary:
+	if not state.resultsReviewed: return _no("Review the results before answering the check questions.")
+	var parts := str(target if target != null else "").split(":", true, 1)
+	var check := _check_by_id(parts[0])
+	if check.is_empty() or parts.size() != 2: return _no("Choose one of the listed check questions.")
+	if check.stage == "debrief" and state.phase != "Complete": return _no("These questions open after the debrief.")
+	for answer in state.checkAnswers:
+		if answer.questionId == check.id: return _no("That question already has a recorded answer.")
+	var chosen: Variant = null
+	var best := ""
+	for option in check.options:
+		if option.id == parts[1]: chosen = option
+		if option.id == check.correctOptionId: best = str(option.text)
+	if chosen == null: return _no("Choose one of the listed answers.")
+	var correct: bool = chosen.id == check.correctOptionId
+	state.checkAnswers.append({"questionId":check.id,"optionId":chosen.id,"correct":correct})
+	return _yes("Correct. Your answer is recorded." if correct else "Not quite. Your answer is recorded. The best answer: " + best + ".")
+func _check_by_id(id: String) -> Dictionary:
+	for check in rules.get("comprehensionChecks", []):
+		if check.id == id: return check
+	return {}
+# Plain-language reasons a run cannot support a conclusion, in a fixed order.
+func _support_problems() -> Array:
+	var problems: Array = []
+	var controls: Array = []
+	var treatments: Array = []
+	for well in state.wells:
+		if well.role in ["Blank", "Vehicle control"]: controls.append(well)
+		elif well.role == "Fictional treatment": treatments.append(well)
+	var wrong_volume := func(w): return absf((0.0 if w.transferVolumeUl == null else float(w.transferVolumeUl)) - float(scenario.toyTransferVolumeUl)) >= .01
+	var wrong_liquid := func(w): return w.sourceRole != null and w.sourceRole != w.role
+	if not state.correctOrientation: problems.append("the plate orientation is incorrect")
+	if controls.any(wrong_volume): problems.append("a blank or vehicle well is missing or has the wrong volume")
+	if controls.any(wrong_liquid): problems.append("a blank or vehicle well received the wrong liquid")
+	if state.readerRan:
+		var vehicles: Array = []
+		for well in controls:
+			if well.role == "Vehicle control": vehicles.append(0.0 if well.backgroundAdjusted == null else float(well.backgroundAdjusted))
+		if _mean(vehicles) < float(rules.minimumReferenceAdjustedSignal): problems.append("the vehicle reference signal is too low to compare against")
+	if state.issues.any(func(i): return not i.resolved and ["WrongWell", "Mislabel", "SampleIdentityMismatch", "TransferBeforeTraceability"].has(i.code)): problems.append("a traceability issue is unresolved")
+	if treatments.any(wrong_volume): problems.append("a treatment well is missing or has the wrong volume")
+	if treatments.any(wrong_liquid): problems.append("a treatment well received the wrong liquid")
+	var flags: Array = []
+	for issue in state.issues:
+		if issue.critical and not issue.resolved and not ["WrongWell", "Mislabel", "SampleIdentityMismatch", "TransferBeforeTraceability", "PlateOrientation", "MissingControl"].has(issue.code) and not flags.has(FLAG_LABELS.get(issue.code, issue.code)): flags.append(FLAG_LABELS.get(issue.code, issue.code))
+	if not flags.is_empty(): problems.append("unresolved handling flags: " + ", ".join(PackedStringArray(flags)))
+	if problems.is_empty(): problems.append("the controls or workflow conditions do not pass the model's checks")
+	return problems
 func snapshot() -> Dictionary: return state.duplicate(true)
 func save() -> String: return JSON.stringify({"webEnvelope":WEB_ENVELOPE,"levelId":LEVEL_ID,"formatVersion":SAVE_FORMAT,"modelVersion":MODEL_VERSION,"scenario":scenario,"rules":rules,"sources":sources,"snapshot":state}, "", true, true)
 func restore(text: String) -> bool:
 	var save: Variant=JSON.parse_string(text)
-	if typeof(save)!=TYPE_DICTIONARY or save.get("webEnvelope")!=WEB_ENVELOPE or save.get("levelId")!=LEVEL_ID or save.get("formatVersion")!=SAVE_FORMAT or save.get("modelVersion")!=MODEL_VERSION or typeof(save.get("scenario"))!=TYPE_DICTIONARY or typeof(save.get("rules"))!=TYPE_DICTIONARY or typeof(save.get("sources"))!=TYPE_DICTIONARY or typeof(save.get("snapshot"))!=TYPE_DICTIONARY: return false
+	if typeof(save)!=TYPE_DICTIONARY or save.get("webEnvelope")!=WEB_ENVELOPE or save.get("levelId")!=LEVEL_ID or save.get("formatVersion")!=SAVE_FORMAT or not RESTORABLE_MODEL_VERSIONS.has(save.get("modelVersion")) or typeof(save.get("scenario"))!=TYPE_DICTIONARY or typeof(save.get("rules"))!=TYPE_DICTIONARY or typeof(save.get("sources"))!=TYPE_DICTIONARY or typeof(save.get("snapshot"))!=TYPE_DICTIONARY: return false
 	var saved:Dictionary=save
 	var snapshot_saved:Dictionary=saved.snapshot
+	if not snapshot_saved.has("checkAnswers"): snapshot_saved.checkAnswers = [] # 1.1.0 saves predate check answers
 	if not _valid_snapshot_shape(snapshot_saved, saved.scenario): return false
 	var candidate:=Level1Simulation.new()
 	candidate.scenario=saved.scenario.duplicate(true); candidate.rules=saved.rules.duplicate(true); candidate.sources=saved.sources.duplicate(true)
@@ -267,7 +326,7 @@ func build_report() -> Dictionary:
 	if state.escalated: conclusion = "Run was escalated for review. No biological conclusion is claimed by this attempt."
 	elif state.interpretationDecision == "supported" and support: conclusion = "In this fictional training model, the treatment wells have a lower normalized luminescence signal than the vehicle controls. This supports an observed viability-associated difference only."
 	elif state.interpretationDecision == "unsupported-claim": conclusion = "An unsupported conclusion was attempted; no biological conclusion is claimed by this attempt."
-	return {"modelVersion":MODEL_VERSION,"scenarioId":scenario.id,"scenarioSchemaVersion":scenario.schemaVersion,"mode":state.mode,"complete":state.phase=="Complete","controlsValid":valid,"canSupportConclusion":support,"escalated":state.escalated,"attemptId":state.attemptId,"attemptNumber":state.attemptNumber,"scenarioSeed":scenario.seed,"rulesSchemaVersion":rules.schemaVersion,"sourcesSchemaVersion":sources.schemaVersion,"interpretationDecision":state.interpretationDecision,"conclusion":conclusion,"categoryStatus":_categories(valid,support),"wells":state.wells.duplicate(true),"issues":state.issues.duplicate(true),"ledger":state.ledger.duplicate(true),"sources":sources.entries.duplicate(true),"replicates":_replicates(),"lessons":lessons.duplicate(true) if state.phase=="Complete" else [],"scientificLimit":"ATP-associated luminescence is a viability proxy and does not establish a cell-death mechanism. Stored source and well quantities are nominal training amounts, not physical volume measurements or calibration results."}
+	return {"modelVersion":MODEL_VERSION,"scenarioId":scenario.id,"scenarioSchemaVersion":scenario.schemaVersion,"mode":state.mode,"complete":state.phase=="Complete","controlsValid":valid,"canSupportConclusion":support,"escalated":state.escalated,"attemptId":state.attemptId,"attemptNumber":state.attemptNumber,"scenarioSeed":scenario.seed,"rulesSchemaVersion":rules.schemaVersion,"sourcesSchemaVersion":sources.schemaVersion,"interpretationDecision":state.interpretationDecision,"conclusion":conclusion,"categoryStatus":_categories(valid,support),"wells":state.wells.duplicate(true),"issues":state.issues.duplicate(true),"ledger":state.ledger.duplicate(true),"sources":sources.entries.duplicate(true),"replicates":_replicates(),"lessons":lessons.duplicate(true) if state.phase=="Complete" else [],"checkAnswers":state.checkAnswers.duplicate(true),"scientificLimit":"ATP-associated luminescence is a viability proxy and does not establish a cell-death mechanism. Stored source and well quantities are nominal training amounts, not physical volume measurements or calibration results."}
 func _categories(valid:bool,support:bool)->Dictionary:
 	return {"Preparation":"Complete" if state.ppeWorn and state.benchDisinfected and state.materialsChecked else "Incomplete","Traceability":"Complete" if state.labelsVerified and state.plateMapReviewed and state.correctOrientation and not state.issues.any(func(i):return not i.resolved and ["Mislabel","SampleIdentityMismatch","WrongWell"].has(i.code)) else "Needs review","Handling":"Complete" if _ready() and not _critical() else "Needs review","Interpretation":"Complete" if state.resultsReviewed and ((state.interpretationDecision=="supported" and support) or state.escalated) else "Needs review","Closeout":"Complete" if state.wasteSorted and state.benchCleanedAtCloseout and state.handoffRecorded else "Incomplete"}
 func _replicates()->Array:
@@ -373,7 +432,7 @@ func _load(path:String)->Dictionary:var parsed:Variant=JSON.parse_string(FileAcc
 func _id()->String:return "%08x%08x%08x%08x" % [randi(),randi(),randi(),randi()]
 
 func _action_names() -> Array:
-	return ["WearPpe","DisinfectBench","CheckMaterials","VerifyLabels","ReviewPlateMap","AttachTip","EjectTip","ChangeTip","SetVolume","SelectSource","PressFirstStop","MoveToSource","ReleaseSlow","ReleaseFast","MoveToDestination","PressSecondStop","WithdrawAndRelease","Aspirate","Dispense","MislabelSelectedWell","CorrectLabel","RetryTransferCheckpoint","LoadPlate","ConfigureReader","RunReader","ReviewResults","DecideSupportedConclusion","EscalateInvalidRun","SortWaste","CleanBench","RecordHandoff"]
+	return ["WearPpe","DisinfectBench","CheckMaterials","VerifyLabels","ReviewPlateMap","AttachTip","EjectTip","ChangeTip","SetVolume","SelectSource","PressFirstStop","MoveToSource","ReleaseSlow","ReleaseFast","MoveToDestination","PressSecondStop","WithdrawAndRelease","Aspirate","Dispense","MislabelSelectedWell","CorrectLabel","RetryTransferCheckpoint","LoadPlate","ConfigureReader","RunReader","ReviewResults","DecideSupportedConclusion","EscalateInvalidRun","SortWaste","CleanBench","RecordHandoff","AnswerCheck"]
 
 func _definitions_valid() -> bool:
 	if scenario.get("schemaVersion") != 1 or str(scenario.get("id", "")).strip_edges().is_empty() or str(scenario.get("readerMode", "")).strip_edges().is_empty():
@@ -405,11 +464,27 @@ func _definitions_valid() -> bool:
 		return false
 	if not is_finite(float(rules.get("minimumReferenceAdjustedSignal", 0.0))) or float(rules.get("minimumReferenceAdjustedSignal", 0.0)) <= 0.0:
 		return false
+	if not _checks_valid(rules.get("comprehensionChecks", [])):
+		return false
 	if sources.get("schemaVersion") != 1 or typeof(sources.get("entries")) != TYPE_ARRAY:
 		return false
 	for source in sources.entries:
 		if typeof(source) != TYPE_DICTIONARY or not _valid_https_url(str(source.get("url", ""))):
 			return false
+	return true
+
+func _checks_valid(checks: Variant) -> bool:
+	if typeof(checks) != TYPE_ARRAY: return false
+	var ids: Dictionary = {}
+	for check in checks:
+		if typeof(check) != TYPE_DICTIONARY or str(check.get("id", "")).is_empty() or ids.has(check.id) or not ["follow-up", "debrief"].has(check.get("stage")): return false
+		if str(check.get("prompt", "")).is_empty() or str(check.get("explanation", "")).is_empty() or typeof(check.get("options")) != TYPE_ARRAY or check.options.size() < 2: return false
+		ids[check.id] = true
+		var option_ids: Dictionary = {}
+		for option in check.options:
+			if typeof(option) != TYPE_DICTIONARY or str(option.get("id", "")).is_empty() or str(option.get("text", "")).is_empty() or option_ids.has(option.id): return false
+			option_ids[option.id] = true
+		if not option_ids.has(check.get("correctOptionId")): return false
 	return true
 
 func _valid_well_id(value: String) -> bool:
@@ -449,7 +524,7 @@ func _valid_port(value: String) -> bool:
 func _valid_snapshot_shape(candidate:Variant,candidate_scenario:Variant)->bool:
 	if typeof(candidate)!=TYPE_DICTIONARY or typeof(candidate_scenario)!=TYPE_DICTIONARY: return false
 	if not candidate.get("started",false) or not _valid_id(str(candidate.get("attemptId",""))) or not ["GuidedPractice","Assessment"].has(candidate.get("mode")) or not ["Welcome","Preparation","Organization","Transfers","Measurement","Interpretation","Closeout","Complete"].has(candidate.get("phase")): return false
-	if typeof(candidate.get("wells"))!=TYPE_ARRAY or typeof(candidate.get("issues"))!=TYPE_ARRAY or typeof(candidate.get("ledger"))!=TYPE_ARRAY or typeof(candidate.get("sourceRemainingVolumeUl"))!=TYPE_DICTIONARY: return false
+	if typeof(candidate.get("checkAnswers"))!=TYPE_ARRAY or typeof(candidate.get("wells"))!=TYPE_ARRAY or typeof(candidate.get("issues"))!=TYPE_ARRAY or typeof(candidate.get("ledger"))!=TYPE_ARRAY or typeof(candidate.get("sourceRemainingVolumeUl"))!=TYPE_DICTIONARY: return false
 	for role in ["Blank","Vehicle control","Fictional treatment"]:
 		if not candidate.sourceRemainingVolumeUl.has(role) or not is_finite(float(candidate.sourceRemainingVolumeUl[role])) or float(candidate.sourceRemainingVolumeUl[role])<0.0 or float(candidate.sourceRemainingVolumeUl[role])>250.0: return false
 	for well in candidate.wells:
@@ -509,6 +584,8 @@ func _science(action:String,accepted:bool,_target:Variant,_value:Variant)->Dicti
 	if not accepted:return {"title":"Check the workflow","lesson":"The simulation keeps actions ordered so that the next observation has context.","why":"In real work, pause and follow the local procedure when the next safe step is unclear."}
 	if action == "PressFirstStop" and state.pipetteStage == "FirstStopAtDestination":
 		return {"title":"Nominal delivery at first stop","lesson":"In this training model, the first stop at the destination records the nominal set amount immediately.","why":"The second stop clears the modeled residue state; it does not add a fabricated extra volume."}
+	if action == "AnswerCheck":
+		return {"title":"Check your understanding","lesson":str(_check_by_id(str(_target if _target != null else "").split(":", true, 1)[0]).get("explanation", "")),"why":"Your first answer to each question is kept in the attempt record."}
 	if action == "DecideSupportedConclusion" and not state.canSupportConclusion:
 		return {"title":"Know when not to conclude","lesson":"An experiment can produce numbers yet still be invalid for the question being asked.","why":"Recognizing that limit protects later decisions from an attractive but unsupported result."}
 	var entries:Dictionary={

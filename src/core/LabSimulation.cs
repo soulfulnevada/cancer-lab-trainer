@@ -9,7 +9,9 @@ namespace CancerLabTrainer.Core;
 /// </summary>
 public sealed class LabSimulation
 {
-    public const string ModelVersion = "1.1.0";
+    public const string ModelVersion = "1.2.0";
+    // 1.1.0 saves replay unchanged unless their controls failed after the reader ran.
+    private static readonly string[] RestorableModelVersions = ["1.1.0", ModelVersion];
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -32,7 +34,8 @@ public sealed class LabSimulation
             || _rules.CriticalErrors is null || _rules.AssessmentCategories is null || _sources.Entries is null
             || !double.IsFinite(_rules.MaxReplicateCvPercent) || _rules.MaxReplicateCvPercent <= 0
             || !double.IsFinite(_rules.MinimumReferenceAdjustedSignal) || _rules.MinimumReferenceAdjustedSignal <= 0
-            || _sources.Entries.Any(s => s is null || !Uri.TryCreate(s.Url, UriKind.Absolute, out var url) || url.Scheme != "https"))
+            || _sources.Entries.Any(s => s is null || !Uri.TryCreate(s.Url, UriKind.Absolute, out var url) || url.Scheme != "https")
+            || !ChecksValid(_rules.ComprehensionChecks))
             throw new ArgumentException("Rules or source manifest is invalid or unsupported.");
         _scenario = JsonSerializer.Deserialize<ScenarioDefinition>(JsonSerializer.Serialize(scenario, JsonOptions), JsonOptions)!;
     }
@@ -75,8 +78,8 @@ public sealed class LabSimulation
     {
         EnsureStarted();
         if (action is null || !Enum.IsDefined(action.Type)) return RejectWithSnapshot("A recognized action is required.");
-        if (_state.Phase == LabPhase.Complete) return RejectWithSnapshot("This completed attempt is locked. Start a new attempt to preserve its audit record.");
-        if (_state.ReaderRan && action.Type is not (LabActionType.ReviewResults or LabActionType.DecideSupportedConclusion or LabActionType.EscalateInvalidRun or LabActionType.SortWaste or LabActionType.CleanBench or LabActionType.RecordHandoff))
+        if (_state.Phase == LabPhase.Complete && action.Type != LabActionType.AnswerCheck) return RejectWithSnapshot("This completed attempt is locked. Start a new attempt to preserve its audit record.");
+        if (_state.ReaderRan && action.Type is not (LabActionType.ReviewResults or LabActionType.DecideSupportedConclusion or LabActionType.EscalateInvalidRun or LabActionType.SortWaste or LabActionType.CleanBench or LabActionType.RecordHandoff or LabActionType.AnswerCheck))
             return RejectWithSnapshot("Acquired measurements are locked. Start a new attempt for a new preparation or reading.");
         if (action.Type is LabActionType.SortWaste or LabActionType.CleanBench or LabActionType.RecordHandoff && _state.Phase != LabPhase.Closeout)
             return RejectWithSnapshot("Record the result disposition before completing closeout.");
@@ -121,13 +124,14 @@ public sealed class LabSimulation
                 "Leave a usable workspace", "Cleanup ends the task and prepares the shared area for the next user.", "Closeout makes deviations visible instead of silently passing them forward."),
             LabActionType.RecordHandoff => SetOnce(() => _state.HandoffRecorded = true, _state.HandoffRecorded, "Handoff record completed.",
                 "Scientific memory", "A handoff records what happened, including deviations and any escalation.", "Without documentation, a later reviewer cannot tell whether an unexpected result was experimental biology or a process problem."),
+            LabActionType.AnswerCheck => AnswerCheck(action.Target),
             _ => Rejected("That action is not available in this version of the scenario.")
         };
 
         if (result.Accepted) _state.SimulatedMinutes += 2;
         _state.Ledger.Add(new LedgerEvent { SimulatedMinute = _state.SimulatedMinutes, AttemptNumber = _state.AttemptNumber, Action = action.Type.ToString(), Target = action.Target, Value = action.Value is { } v && double.IsFinite(v) ? v : null, Outcome = result.Message });
         UpdatePhase();
-        if (result.Accepted)
+        if (result.Accepted && action.Type != LabActionType.AnswerCheck)
         {
             var lesson = new ScienceLesson(result.ScienceTitle, result.ScienceLesson, result.WhyItMatters);
             if (!_lessons.Contains(lesson)) _lessons.Add(lesson);
@@ -148,7 +152,7 @@ public sealed class LabSimulation
     public static LabSimulation Restore(string json)
     {
         var saved = JsonSerializer.Deserialize<PersistedSession>(json, JsonOptions) ?? throw new ArgumentException("Saved session is invalid.");
-        if (saved.FormatVersion != 3 || saved.ModelVersion != ModelVersion || saved.Scenario is null || saved.Rules is null || saved.Sources is null || saved.Snapshot is null) throw new ArgumentException("This attempt uses an incompatible model or save format. Its file has been preserved.");
+        if (saved.FormatVersion != 3 || !RestorableModelVersions.Contains(saved.ModelVersion) || saved.Scenario is null || saved.Rules is null || saved.Sources is null || saved.Snapshot is null) throw new ArgumentException("This attempt uses an incompatible model or save format. Its file has been preserved.");
         var simulation = new LabSimulation(saved.Scenario, saved.Rules, saved.Sources);
         ValidateSnapshot(saved.Snapshot, saved.Scenario);
         // Rebuild from recorded actions so cached quantities, flags, readings and phase
@@ -208,7 +212,8 @@ public sealed class LabSimulation
             Ledger = _state.Ledger.Select(x => new LedgerEvent { SimulatedMinute = x.SimulatedMinute, AttemptNumber = x.AttemptNumber, Action = x.Action, Target = x.Target, Value = x.Value, Outcome = x.Outcome }).ToList(),
             Sources = _sources.Entries.Select(x => new SourceEntry { Id = x.Id, Label = x.Label, Url = x.Url, Use = x.Use }).ToList(),
             Replicates = ReplicateSummaries(),
-            Lessons = _state.Phase == LabPhase.Complete ? _lessons.ToList() : []
+            Lessons = _state.Phase == LabPhase.Complete ? _lessons.ToList() : [],
+            CheckAnswers = _state.CheckAnswers.Select(x => new CheckAnswer { QuestionId = x.QuestionId, OptionId = x.OptionId, Correct = x.Correct }).ToList()
         };
     }
 
@@ -411,19 +416,23 @@ public sealed class LabSimulation
         if (ReplicateSummaries().Any(r => r.Role != "Blank" && r.CvPercent > _rules.MaxReplicateCvPercent)) AddIssue("ReplicateVariation", "Technical replicate spread exceeds this scenario's illustrative QC threshold.", true, false);
         _state.ControlsValid = ComputeControlsValid();
         _state.CanSupportConclusion = _state.ControlsValid && AllRequiredWellsReady() && !_state.Issues.Any(x => x.Critical && !x.Resolved);
-        return Accepted("Fictional readings generated from the versioned scenario seed.", "Signal, background, and comparison", "Raw light includes background. The app subtracts the average blank signal, then expresses each active well relative to the vehicle-control average.", "These calculations organize a comparison; they do not tell you why a signal changed or establish a real effect.");
+        // Without a valid blank and vehicle reference the percentage has no sound basis, so it is withheld.
+        if (!_state.ControlsValid) foreach (var well in _state.Wells) well.RelativeToVehicle = null;
+        return Accepted(_state.ControlsValid ? "Fictional readings generated from the versioned scenario seed." : "Fictional readings generated from the versioned scenario seed. The blank or vehicle reference is not valid, so no percentage of vehicle is calculated.", "Signal, background, and comparison", "Raw light includes background. The app subtracts the average blank signal, then expresses each active well relative to the vehicle-control average.", "These calculations organize a comparison; they do not tell you why a signal changed or establish a real effect.");
     }
 
     private ActionResult ReviewResults()
     {
         if (!_state.ReaderRan) return Rejected("Run the reader before reviewing results.");
         _state.ResultsReviewed = true;
-        return Accepted(_state.CanSupportConclusion ? "Controls pass the fictional model’s validity checks." : "The model marks this run as unsuitable for a supported conclusion.", "Interpretation starts with controls", "Replicate spread gives context for a mean, and controls tell whether a comparison is interpretable.", "A lower treatment signal is an observation. It becomes a supported comparison only when the necessary controls and traceability conditions hold.");
+        return Accepted(_state.CanSupportConclusion ? "Controls pass the fictional model’s validity checks." : "The model marks this run as unsuitable for a supported conclusion: " + string.Join("; ", SupportProblems()) + ".", "Interpretation starts with controls", "Replicate spread gives context for a mean, and controls tell whether a comparison is interpretable.", "A lower treatment signal is an observation. It becomes a supported comparison only when the necessary controls and traceability conditions hold.");
     }
 
     private ActionResult DecideConclusion()
     {
         if (!_state.ResultsReviewed) return Rejected("Review the results before recording a conclusion.");
+        if (!_state.CanSupportConclusion && _state.Mode == RunMode.GuidedPractice)
+            return Rejected("This run cannot support a conclusion: " + string.Join("; ", SupportProblems()) + ". Escalate it for review instead.");
         if (!_state.CanSupportConclusion)
         {
             _state.InterpretationDecision = "unsupported-claim";
@@ -440,6 +449,62 @@ public sealed class LabSimulation
         _state.Escalated = true;
         return Accepted(_state.CanSupportConclusion ? "Run escalated for review despite passing the fictional QC checks; no conclusion will be claimed." : "Invalid run escalated and preserved in the handoff record.", "Escalation is scientific judgment", "Escalation documents that a control or setup condition prevents a supported conclusion.", "Stopping an invalid run is often better practice than forcing an interpretation from unreliable evidence.");
     }
+
+    private ActionResult AnswerCheck(string? target)
+    {
+        if (!_state.ResultsReviewed) return Rejected("Review the results before answering the check questions.");
+        var parts = (target ?? "").Split(':', 2);
+        var check = _rules.ComprehensionChecks.FirstOrDefault(c => c.Id == parts[0]);
+        if (check is null || parts.Length != 2) return Rejected("Choose one of the listed check questions.");
+        if (check.Stage == "debrief" && _state.Phase != LabPhase.Complete) return Rejected("These questions open after the debrief.");
+        if (_state.CheckAnswers.Any(a => a.QuestionId == check.Id)) return Rejected("That question already has a recorded answer.");
+        var option = check.Options.FirstOrDefault(o => o.Id == parts[1]);
+        if (option is null) return Rejected("Choose one of the listed answers.");
+        var correct = option.Id == check.CorrectOptionId;
+        _state.CheckAnswers.Add(new CheckAnswer { QuestionId = check.Id, OptionId = option.Id, Correct = correct });
+        var best = check.Options.Single(o => o.Id == check.CorrectOptionId).Text;
+        return Accepted(correct ? "Correct. Your answer is recorded." : "Not quite. Your answer is recorded. The best answer: " + best + ".", "Check your understanding", check.Explanation, "Your first answer to each question is kept in the attempt record.");
+    }
+
+    private static readonly Dictionary<string, string> FlagLabels = new()
+    {
+        ["TransferBeforePpe"] = "transfer before PPE",
+        ["WrongVolume"] = "wrong volume",
+        ["ReaderMode"] = "reader mode",
+        ["Carryover"] = "tip carryover",
+        ["FastAspirationRelease"] = "fast aspiration release",
+        ["DuplicateTransfer"] = "duplicate transfer",
+        ["UnsupportedConclusion"] = "unsupported conclusion",
+        ["ReplicateVariation"] = "replicate spread above the QC threshold"
+    };
+
+    /// <summary>Plain-language reasons a run cannot support a conclusion, in a fixed order.</summary>
+    private List<string> SupportProblems()
+    {
+        var problems = new List<string>();
+        var controls = _state.Wells.Where(w => w.Role is "Blank" or "Vehicle control").ToList();
+        var treatments = _state.Wells.Where(w => w.Role == "Fictional treatment").ToList();
+        bool WrongVolume(WellRunState w) => Math.Abs((w.TransferVolumeUl ?? 0) - _scenario.ToyTransferVolumeUl) >= 0.01;
+        bool WrongLiquid(WellRunState w) => w.SourceRole is not null && w.SourceRole != w.Role;
+        if (!_state.CorrectOrientation) problems.Add("the plate orientation is incorrect");
+        if (controls.Any(WrongVolume)) problems.Add("a blank or vehicle well is missing or has the wrong volume");
+        if (controls.Any(WrongLiquid)) problems.Add("a blank or vehicle well received the wrong liquid");
+        if (_state.ReaderRan && controls.Where(w => w.Role == "Vehicle control").Average(w => w.BackgroundAdjusted ?? 0) < _rules.MinimumReferenceAdjustedSignal)
+            problems.Add("the vehicle reference signal is too low to compare against");
+        if (_state.Issues.Any(x => !x.Resolved && x.Code is "WrongWell" or "Mislabel" or "SampleIdentityMismatch" or "TransferBeforeTraceability")) problems.Add("a traceability issue is unresolved");
+        if (treatments.Any(WrongVolume)) problems.Add("a treatment well is missing or has the wrong volume");
+        if (treatments.Any(WrongLiquid)) problems.Add("a treatment well received the wrong liquid");
+        var flags = _state.Issues.Where(x => x.Critical && !x.Resolved && x.Code is not ("WrongWell" or "Mislabel" or "SampleIdentityMismatch" or "TransferBeforeTraceability" or "PlateOrientation" or "MissingControl")).Select(x => FlagLabels.GetValueOrDefault(x.Code, x.Code)).Distinct().ToList();
+        if (flags.Count > 0) problems.Add("unresolved handling flags: " + string.Join(", ", flags));
+        if (problems.Count == 0) problems.Add("the controls or workflow conditions do not pass the model's checks");
+        return problems;
+    }
+
+    private static bool ChecksValid(List<ComprehensionCheck>? checks) => checks is not null
+        && checks.Select(c => c?.Id).Distinct().Count() == checks.Count
+        && checks.All(c => c is not null && c.Id.Length > 0 && c.Stage is "follow-up" or "debrief" && c.Prompt.Length > 0 && c.Explanation.Length > 0
+            && c.Options is { Count: >= 2 } && c.Options.All(o => o is not null && o.Id.Length > 0 && o.Text.Length > 0)
+            && c.Options.Select(o => o.Id).Distinct().Count() == c.Options.Count && c.Options.Any(o => o.Id == c.CorrectOptionId));
 
     private double ModeledReading(WellRunState well)
     {

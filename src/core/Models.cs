@@ -25,7 +25,7 @@ public enum LabActionType
     PressFirstStop, MoveToSource, ReleaseSlow, ReleaseFast, MoveToDestination, PressSecondStop, WithdrawAndRelease,
     Aspirate, Dispense, MislabelSelectedWell, CorrectLabel, RetryTransferCheckpoint, LoadPlate, ConfigureReader,
     RunReader, ReviewResults, DecideSupportedConclusion, EscalateInvalidRun,
-    SortWaste, CleanBench, RecordHandoff
+    SortWaste, CleanBench, RecordHandoff, AnswerCheck
 }
 
 public sealed record LearnerAction(LabActionType Type, string? Target = null, double? Value = null);
@@ -57,6 +57,31 @@ public sealed class TrainingRulesDefinition
     public List<string> AssessmentCategories { get; set; } = [];
     public double MaxReplicateCvPercent { get; set; } = 20;
     public double MinimumReferenceAdjustedSignal { get; set; } = 100;
+    public List<ComprehensionCheck> ComprehensionChecks { get; set; } = [];
+}
+
+/// <summary>A multiple-choice check. "follow-up" opens after results are reviewed; "debrief" opens once the attempt is complete.</summary>
+public sealed class ComprehensionCheck
+{
+    public string Id { get; set; } = "";
+    public string Stage { get; set; } = "";
+    public string Prompt { get; set; } = "";
+    public List<CheckOption> Options { get; set; } = [];
+    public string CorrectOptionId { get; set; } = "";
+    public string Explanation { get; set; } = "";
+}
+
+public sealed class CheckOption
+{
+    public string Id { get; set; } = "";
+    public string Text { get; set; } = "";
+}
+
+public sealed class CheckAnswer
+{
+    public string QuestionId { get; set; } = "";
+    public string OptionId { get; set; } = "";
+    public bool Correct { get; set; }
 }
 
 public sealed class SourcesManifest
@@ -163,6 +188,7 @@ public sealed class SimulationSnapshot
     public string? InterpretationDecision { get; set; }
     public List<WellRunState> Wells { get; set; } = [];
     public List<SimulationIssue> Issues { get; set; } = [];
+    public List<CheckAnswer> CheckAnswers { get; set; } = [];
 }
 
 public sealed class LabReport
@@ -189,6 +215,7 @@ public sealed class LabReport
     public List<SourceEntry> Sources { get; set; } = [];
     public List<ReplicateSummary> Replicates { get; set; } = [];
     public List<ScienceLesson> Lessons { get; set; } = [];
+    public List<CheckAnswer> CheckAnswers { get; set; } = [];
     public string ScientificLimit { get; set; } = "ATP-associated luminescence is a viability proxy and does not establish a cell-death mechanism. Stored source and well quantities are nominal training amounts, not physical volume measurements or calibration results.";
 }
 

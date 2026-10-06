@@ -20,7 +20,7 @@ func _init() -> void:
 			return
 	if not _edge_contracts():
 		return
-	print("PASS: Level 1 full snapshot/report/feedback parity: 2 normal and 2 edge traces plus recovery and restore contracts")
+	print("PASS: Level 1 full snapshot/report/feedback parity: 2 normal and 3 edge traces plus recovery and restore contracts")
 	quit(0)
 
 func _compare_trace(expected_run: Dictionary, mode: String) -> bool:
