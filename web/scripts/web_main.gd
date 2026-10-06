@@ -1,7 +1,7 @@
 extends Node
 
 # Browser controller: the GDScript simulations remain the only science/state authority.
-const WEB_VERSION := "1.2.1-web.1"
+const WEB_VERSION := "1.2.1-web.2"
 const LabWorld := preload("res://scripts/ui/lab_world.gd")
 
 var level := ""
@@ -41,6 +41,7 @@ func _on_browser_message(arguments: Array) -> void:
 			selected_well = str(message.get("well", "B1"))
 			_render_run()
 		"menu": _render_menu()
+		"repeat-cycle": _repeat_cycle(str(message.get("well", "")))
 		"resume": _resume(str(message.get("level", "")), str(message.get("id", "")))
 		"delete": _delete_attempt(str(message.get("level", "")), str(message.get("id", "")))
 		"export": _export_report(str(message.get("format", "csv")))
@@ -105,6 +106,27 @@ func _submit(action: String, target: Variant, value: Variant) -> void:
 		elif _snapshot().mode == "Assessment" and not bool(response.get("accepted", false)):
 			last_feedback += "\n\n" + _assessment_action_context(_snapshot())
 	_save_current() # Includes rejected actions because the model ledger records them.
+	_render_run()
+
+# Guided-only shortcut: replays the seven forward-cycle actions through the model in order,
+# so the ledger, validity checks, and saves are identical to pressing each control.
+func _repeat_cycle(well: String) -> void:
+	if level != "level1" or str(_snapshot().get("mode", "")) != "GuidedPractice" or not ["B1", "B2", "B3", "B4", "B5", "B6"].has(well):
+		return
+	var source: Variant = _snapshot().get("selectedSource")
+	var steps := [["PressFirstStop", null], ["MoveToSource", source], ["ReleaseSlow", null], ["MoveToDestination", well], ["PressFirstStop", null], ["PressSecondStop", null], ["WithdrawAndRelease", null]]
+	var completed := 0
+	for step in steps:
+		var response := level1.submit(step[0], step[1], null)
+		if not bool(response.get("accepted", false)):
+			last_feedback = "Repeat cycle stopped after %s of 7 steps: %s" % [completed, str(response.message)]
+			_save_current()
+			_render_run()
+			return
+		completed += 1
+	selected_well = well
+	last_feedback = "Repeated the forward cycle into %s with %s: first stop in air, into the source, slow release, position at %s, first stop, second stop, withdraw. All 7 steps were recorded in order." % [well, source, well]
+	_save_current()
 	_render_run()
 
 func _snapshot() -> Dictionary:
@@ -199,11 +221,11 @@ func _render_run() -> void:
 
 func _display_state(state: Dictionary) -> Dictionary:
 	if level == "level1":
-		return {"pipetteStage":state.get("pipetteStage"), "tipAttached":state.get("tipAttached"), "tipId":state.get("tipId"), "selectedVolumeUl":state.get("selectedVolumeUl"), "targetVolumeUl":level1.scenario.get("toyTransferVolumeUl"), "sourceRemainingVolumeUl":state.get("sourceRemainingVolumeUl"), "selectedSource":state.get("selectedSource"), "boundDestination":state.get("boundDestination"), "readerRan":state.get("readerRan"), "plateLoaded":state.get("plateLoaded"), "correctOrientation":state.get("correctOrientation"), "readerConfigured":state.get("readerConfigured"), "resultsReviewed":state.get("resultsReviewed"), "attempt":state.get("attemptNumber"), "ppeWorn":state.get("ppeWorn"), "benchDisinfected":state.get("benchDisinfected"), "materialsChecked":state.get("materialsChecked"), "labelsVerified":state.get("labelsVerified"), "plateMapReviewed":state.get("plateMapReviewed")}
+		return {"pipetteStage":state.get("pipetteStage"), "tipAttached":state.get("tipAttached"), "tipId":state.get("tipId"), "selectedVolumeUl":state.get("selectedVolumeUl"), "targetVolumeUl":level1.scenario.get("toyTransferVolumeUl"), "sourceRemainingVolumeUl":state.get("sourceRemainingVolumeUl"), "selectedSource":state.get("selectedSource"), "boundDestination":state.get("boundDestination"), "readerRan":state.get("readerRan"), "plateLoaded":state.get("plateLoaded"), "correctOrientation":state.get("correctOrientation"), "readerConfigured":state.get("readerConfigured"), "resultsReviewed":state.get("resultsReviewed"), "attempt":state.get("attemptNumber"), "ppeWorn":state.get("ppeWorn"), "benchDisinfected":state.get("benchDisinfected"), "materialsChecked":state.get("materialsChecked"), "labelsVerified":state.get("labelsVerified"), "plateMapReviewed":state.get("plateMapReviewed"), "tipContaminationRole":state.get("tipContaminationRole")}
 	var case_choices: Array = []
 	for definition in level2.cases.get("cases", []):
 		case_choices.append({"id":definition.get("id", ""), "title":definition.get("title", "Lab Detective case")})
-	return {"tubeLabels":state.get("tubeLabels"), "tubeContents":state.get("tubeContents"), "plates":state.get("plates"), "casePlates":state.get("casePlates"), "diagnosticSetup":state.get("diagnosticSetup"), "caseChoices":case_choices, "predictions":state.get("predictions"), "predictionsLocked":state.get("predictionsLocked"), "evidenceViewed":state.get("evidenceCardsViewed"), "attempt":state.get("attemptNumber", 1)}
+	return {"tubeLabels":state.get("tubeLabels"), "tubeContents":state.get("tubeContents"), "plates":state.get("plates"), "casePlates":state.get("casePlates"), "diagnosticSetup":state.get("diagnosticSetup"), "caseChoices":case_choices, "predictions":state.get("predictions"), "predictionsLocked":state.get("predictionsLocked"), "evidenceViewed":state.get("evidenceCardsViewed"), "attempt":state.get("attemptNumber", 1), "explanationChoices":state.get("explanationChoices", []), "diagnosticDecisions":state.get("diagnosticDecisions", []), "cleanupRecorded":state.get("cleanupRecorded", false), "wasteDecisionRecorded":state.get("wasteDecisionRecorded", false), "debriefDocumented":state.get("debriefDocumented", false), "freshTipReady":state.get("freshTipReady", false), "selectedTubeSource":state.get("selectedTubeSource"), "selectedTubeDestination":state.get("selectedTubeDestination")}
 
 func _status_text(state: Dictionary) -> String:
 	if level == "level1":
