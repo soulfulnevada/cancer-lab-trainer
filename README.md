@@ -55,7 +55,7 @@ npm ci
 node run.mjs --build ../../dist/web/<release-id>/game
 ```
 
-The report is written to `dist/playthrough/index.html`. See [the 2026-10-06 playthrough record](docs/validation/web-playthrough-2026-10-06.md) for what it covers and what still needs people.
+Use `--url <deployed site root>` instead of `--build` to check the live site. The report is written to `dist/playthrough/index.html`. See [the 2026-10-06 playthrough record](docs/validation/web-playthrough-2026-10-06.md) for what it covers and what still needs people.
 
 ## Sources and notices
 

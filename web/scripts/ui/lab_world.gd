@@ -99,8 +99,20 @@ func _ready() -> void:
 	_set_camera()
 
 func show_level(_level: String) -> void:
-	for plate in plates:
-		plate.visible = true
+	# Menu: show the Level 1 bench alone; the larger Level 2 plates would overlap its well plate.
+	for node in level1_nodes: node.visible = true
+	pipette.visible = true
+	liquid.visible = false
+	for node in level2_tubes: node.visible = false
+	for node in level2_labels: node.visible = false
+	for plate in plates: plate.visible = false
+	for id in plate_colonies:
+		for colony in plate_colonies[id]: colony.visible = false
+	current_level = ""
+	current_phase = ""
+	closeup_override = null
+	closeup = false
+	_set_camera()
 
 func refresh(level: String, state: Dictionary, selected_well: String) -> void:
 	current_level = level

@@ -26,6 +26,8 @@ The run found and led to these fixes, now in the build:
 - Plate-assignment and Lab Detective claim buttons had accessible names that did not contain their visible text (`label-content-name-mismatch`, serious). Names now start from the visible text's context, for example "P1 · T / LB" and "Uncertainty: Not sure".
 - An intermittent page error: the loading-progress callback could run after the loading bar was removed. It now checks that the bar exists.
 
+The same playthrough was then run against the deployed GitHub Pages site (`--url`, build `1.2.1-web.4` served): all five journeys passed with 0 axe-core violations. Its menu screenshot showed the enlarged Level 2 plates overlapping the Level 1 plate on the level menu; `1.2.1-web.5` shows only the Level 1 bench on the menu.
+
 ## How to rerun
 
 ```
@@ -34,7 +36,7 @@ npm ci
 node run.mjs --build ../../dist/web/<release-id>/game
 ```
 
-The report is written to `dist/playthrough/index.html` with `summary.json` and the screenshots beside it. `--headed` shows the browser. The exit code is non-zero if any journey fails.
+The report is written to `dist/playthrough/index.html` with `summary.json` and the screenshots beside it. `--url https://soulfulnevada.github.io/cancer-lab-trainer/` runs it against the deployed site instead of a local build. `--headed` shows the browser. The exit code is non-zero if any journey fails.
 
 ## Still needed from people
 

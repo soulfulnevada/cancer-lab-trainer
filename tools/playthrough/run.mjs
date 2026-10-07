@@ -1,6 +1,6 @@
 // Plays both levels in both modes against a built web candidate, saving a screenshot at every
 // phase change and running an axe-core accessibility scan on each screen it captures.
-// Usage: node run.mjs [--build <game dir>] [--out <dir>] [--headed]
+// Usage: node run.mjs [--build <game dir> | --url <deployed site root>] [--out <dir>] [--headed]
 // Drives the locally installed Microsoft Edge through playwright-core; no browser download.
 import { chromium } from 'playwright-core';
 import axe from 'axe-core';
@@ -16,7 +16,8 @@ const buildDir = path.resolve(option('--build', path.join(repo, 'dist', 'web', '
 const siteDir = path.join(repo, 'web', 'site');
 const outDir = path.resolve(option('--out', path.join(repo, 'dist', 'playthrough')));
 const headed = process.argv.includes('--headed');
-if (!fs.existsSync(path.join(buildDir, 'index.pck'))) { console.error(`No web build at ${buildDir}. Build one first.`); process.exit(2); }
+const siteUrl = option('--url', '');
+if (!siteUrl && !fs.existsSync(path.join(buildDir, 'index.pck'))) { console.error(`No web build at ${buildDir}. Build one first.`); process.exit(2); }
 fs.rmSync(outDir, { recursive: true, force: true });
 fs.mkdirSync(path.join(outDir, 'shots'), { recursive: true });
 
@@ -32,8 +33,9 @@ const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-store' });
   fs.createReadStream(file).pipe(res);
 });
-await new Promise(r => server.listen(0, '127.0.0.1', r));
-const base = `http://127.0.0.1:${server.address().port}`;
+// A deployed site (--url) has the same layout: landing page at the root, game under /game/.
+if (!siteUrl) await new Promise(r => server.listen(0, '127.0.0.1', r));
+const base = siteUrl ? siteUrl.replace(/\/$/, '') : `http://127.0.0.1:${server.address().port}`;
 
 const browser = await chromium.launch({ channel: 'msedge', headless: !headed, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const shots = [];
@@ -187,13 +189,13 @@ await runFlow({ id: 'l2-assessment', title: 'Level 2 Assessment (Case D)', level
 }
 const version = browser.version();
 await browser.close();
-server.close();
+if (!siteUrl) server.close();
 
 // Report.
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const allOk = flows.every(f => f.ok);
 const a11y = [...violations.values()].map(v => ({ ...v, screens: [...v.screens], examples: [...v.examples] }));
-const summary = { generated: new Date().toISOString(), browser: `Microsoft Edge ${version} (headless, SwiftShader WebGL)`, build: buildDir, flows, accessibility: a11y.map(v => ({ id: v.id, impact: v.impact, help: v.help, screens: v.screens.length })) };
+const summary = { generated: new Date().toISOString(), browser: `Microsoft Edge ${version} (headless, SwiftShader WebGL)`, build: siteUrl || buildDir, flows, accessibility: a11y.map(v => ({ id: v.id, impact: v.impact, help: v.help, screens: v.screens.length })) };
 fs.writeFileSync(path.join(outDir, 'summary.json'), JSON.stringify(summary, null, 2));
 const flowHtml = [...flows, { id: 'landing', title: 'Landing page', ok: true, steps: 0 }].map(f => `<section><h2>${esc(f.title)} — ${f.ok ? 'completed' : 'FAILED'}</h2>${f.steps ? `<p>${f.steps} learner actions.${f.error ? ' ' + esc(f.error) : ''}</p>` : ''}<div class="grid">${shots.filter(s => s.flow === f.id).map(s => `<figure><a href="${s.file}"><img src="${s.file}" alt="${esc(f.title + ': ' + s.caption)}" loading="lazy"></a><figcaption><strong>${esc(s.caption)}</strong>${s.next ? '<br>' + esc(s.next) : ''}${s.feedback ? '<br><span>' + esc(s.feedback) + '</span>' : ''}</figcaption></figure>`).join('')}</div></section>`).join('');
 const a11yHtml = a11y.length ? `<table><tr><th>Rule</th><th>Impact</th><th>Problem</th><th>Screens</th><th>Example</th></tr>${a11y.map(v => `<tr><td><a href="${esc(v.helpUrl)}">${esc(v.id)}</a></td><td>${esc(v.impact)}</td><td>${esc(v.help)}</td><td>${v.screens.length}</td><td><code>${esc(v.examples[0] || '')}</code></td></tr>`).join('')}</table>` : '<p>No WCAG 2.1 A/AA violations detected by axe-core on the captured screens.</p>';
